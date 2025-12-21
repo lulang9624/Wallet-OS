@@ -13,6 +13,7 @@ services:
     # Volume mounting for persistent storage
     volumes:
       - ./wallet_os_data:/app/data
+      - ./static:/app/static
     environment:
       - DATABASE_URL=sqlite:/app/data/wallet-os.db
     # 容器停止后自动重启

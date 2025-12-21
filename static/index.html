@@ -4,107 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wallos Next</title>
-    <style>
-        /* 定义 CSS 变量，便于主题管理 */
-        /* Define CSS variables for theme management */
-        :root {
-            --bg-color: #1a1a1a;
-            --card-bg: #2d2d2d;
-            --text-color: #e0e0e0;
-            --accent: #4caf50;
-        }
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 20px;
-        }
-        /* 响应式容器 */
-        /* Responsive container */
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        h1 { text-align: center; }
-        /* 通用按钮样式 */
-        /* Common button styles */
-        .btn {
-            background: var(--accent);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 1rem;
-        }
-        /* 订阅卡片样式 */
-        /* Subscription card styles */
-        .sub-card {
-            background: var(--card-bg);
-            padding: 20px;
-            margin-bottom: 15px;
-            border-radius: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .sub-info h3 { margin: 0 0 5px 0; }
-        .sub-price { font-size: 1.2rem; font-weight: bold; color: var(--accent); }
-        /* 模态框样式 */
-        /* Modal styles */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.7);
-        }
-        .modal-content {
-            background: var(--card-bg);
-            margin: 10% auto;
-            padding: 20px;
-            width: 90%;
-            max-width: 500px;
-            border-radius: 10px;
-        }
-        input, select {
-            width: 100%;
-            padding: 10px;
-            margin: 10px 0;
-            background: #3d3d3d;
-            border: none;
-            color: white;
-            border-radius: 5px;
-        }
-        /* 统计数据网格布局 */
-        /* Stats grid layout */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        .stat-box {
-            background: var(--card-bg);
-            padding: 20px;
-            border-radius: 10px;
-            text-align: center;
-        }
-        .stat-box h3 { color: #aaa; font-size: 0.9rem; margin-top: 0; }
-        .stat-box .value { font-size: 2rem; font-weight: bold; color: var(--accent); }
-        /* 错误提示样式 */
-        /* Error message styles */
-        .input-error {
-            border: 1px solid #f44336 !important;
-        }
-        .error-msg {
-            color: #f44336;
-            font-size: 0.85rem;
-            margin-top: -8px;
-            margin-bottom: 10px;
-            display: none;
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
@@ -150,32 +50,123 @@
         </div>
     </div>
 
+    <!-- 删除确认模态框 -->
+    <!-- Delete confirmation modal -->
+    <div id="deleteModal" class="modal">
+        <div class="modal-content">
+            <h2>Delete Subscription</h2>
+            <p>To confirm deletion, type <strong id="delete-match-name" style="color: var(--accent);"></strong> below:</p>
+            <input type="text" id="delete-confirm-input" placeholder="Type subscription name">
+            <div style="text-align: right; margin-top: 15px;">
+                <button id="btn-confirm-delete" class="btn" style="background: #f44336; opacity: 0.5; cursor: not-allowed;" disabled onclick="executeDelete()">Delete</button>
+                <button class="btn" style="background: #666;" onclick="closeDeleteModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API = '/api/subscriptions';
+        let currentSubs = []; // Store current subscriptions globally
 
         // 获取并渲染订阅列表
         // Fetch and render subscription list
         async function fetchSubs() {
             const res = await fetch(API);
             const data = await res.json();
+            currentSubs = data; // Save data
             renderStats(data);
             const list = document.getElementById('subs-list');
             list.innerHTML = '';
             data.forEach(sub => {
                 let freqLabel = sub.frequency === 12 ? '/yr' : '/mo';
+                
+                // 计算电池状态
+                // Calculate battery status
+                const batteryHtml = getBatteryHtml(sub.next_payment, sub.frequency);
+
                 list.innerHTML += `
                     <div class="sub-card">
                         <div class="sub-info">
-                            <h3>${sub.name}</h3>
+                            <div style="display:flex;align-items:center;">
+                                <h3>${sub.name}</h3>
+                                ${batteryHtml}
+                            </div>
                             <small>Next: ${sub.next_payment || 'N/A'}</small>
                         </div>
                         <div style="text-align: right;">
                             <div class="sub-price">${sub.currency} ${sub.price}<span style="font-size:0.8rem;color:#aaa">${freqLabel}</span></div>
-                            <button style="background:none; border:none; color:#f44336; cursor:pointer;" onclick="deleteSub(${sub.id})">Delete</button>
+                            <button style="background:none; border:none; color:#f44336; cursor:pointer;" onclick="openDeleteModal(${sub.id})">Delete</button>
                         </div>
                     </div>
                 `;
             });
+            
+            // 触发动画
+            // Trigger animation
+            setTimeout(() => {
+                document.querySelectorAll('.battery-level').forEach(el => {
+                    el.style.width = el.getAttribute('data-width');
+                });
+            }, 100);
+        }
+
+        // 计算电池 HTML
+        // Calculate Battery HTML
+        function getBatteryHtml(nextDateStr, frequency) {
+            if (!nextDateStr) return '';
+            
+            const nextDate = new Date(nextDateStr);
+            const now = new Date();
+            
+            // 重置时间部分，只比较日期
+            // Reset time part, only compare dates
+            nextDate.setHours(0,0,0,0);
+            now.setHours(0,0,0,0);
+
+            let diffTime = nextDate - now;
+            let diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            // 如果过期了
+            // If overdue
+            if (diffDays < 0) {
+                return `
+                    <div class="battery-container" title="Overdue">
+                        <div class="battery" style="border-color: #666;">
+                            <div class="battery-level" style="width: 0%; background: #666;" data-width="0%"></div>
+                        </div>
+                        <span class="days-left" style="color:#666">Exp</span>
+                    </div>
+                `;
+            }
+
+            // 计算周期长度（天）
+            // Calculate cycle length (days)
+            // 简单处理：月付30天，年付365天
+            // Simple logic: Monthly 30 days, Yearly 365 days
+            const cycleDays = frequency === 12 ? 365 : 30;
+            
+            // 计算百分比 (剩余天数 / 周期)
+            // Calculate percentage (days left / cycle)
+            let percentage = (diffDays / cycleDays) * 100;
+            if (percentage > 100) percentage = 100; // 防止刚续费显示溢出
+            
+            // 确定颜色
+            // Determine color
+            let color = '#4caf50'; // Green
+            if (percentage < 20) {
+                color = '#f44336'; // Red
+            } else if (percentage < 50) {
+                color = '#ff9800'; // Orange
+            }
+
+            return `
+                <div class="battery-container" title="${diffDays} days left">
+                    <div class="battery">
+                        <div class="battery-level" style="background: ${color}; width: 0%" data-width="${percentage}%"></div>
+                    </div>
+                    <span class="days-left">${diffDays}d</span>
+                </div>
+            `;
         }
 
         // 计算并显示统计数据
@@ -236,13 +227,59 @@
             fetchSubs();
         }
 
-        // 删除订阅
-        // Delete subscription
-        async function deleteSub(id) {
-            if(confirm('Delete this subscription?')) {
-                await fetch(`${API}/${id}`, { method: 'DELETE' });
-                fetchSubs();
+        // 删除相关变量和逻辑
+        // Delete related variables and logic
+        let deleteTargetId = null;
+        let deleteTargetName = '';
+
+        function openDeleteModal(id) {
+            const sub = currentSubs.find(s => s.id === id);
+            if(!sub) return;
+
+            deleteTargetId = id;
+            deleteTargetName = sub.name;
+
+            document.getElementById('delete-match-name').innerText = sub.name;
+            const input = document.getElementById('delete-confirm-input');
+            input.value = '';
+            
+            const btn = document.getElementById('btn-confirm-delete');
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'not-allowed';
+
+            document.getElementById('deleteModal').style.display = 'block';
+        }
+
+        function closeDeleteModal() {
+            document.getElementById('deleteModal').style.display = 'none';
+            deleteTargetId = null;
+            deleteTargetName = '';
+        }
+
+        // 监听输入以匹配名称
+        // Listen to input to match name
+        document.getElementById('delete-confirm-input').addEventListener('input', function(e) {
+            const val = e.target.value;
+            const btn = document.getElementById('btn-confirm-delete');
+            if(val === deleteTargetName) {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+            } else {
+                btn.disabled = true;
+                btn.style.opacity = '0.5';
+                btn.style.cursor = 'not-allowed';
             }
+        });
+
+        // 执行删除
+        // Execute delete
+        async function executeDelete() {
+            if(!deleteTargetId) return;
+            await fetch(`${API}/${deleteTargetId}`, { method: 'DELETE' });
+            closeDeleteModal();
+            fetchSubs();
         }
 
         // 模态框控制函数
