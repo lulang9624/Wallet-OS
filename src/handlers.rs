@@ -31,6 +31,12 @@ pub async fn create_subscription(
     State(pool): State<DbPool>,
     Json(payload): Json<CreateSubscription>,
 ) -> Result<Json<Subscription>, String> {
+    // 验证必填字段
+    // Validate required fields
+    if payload.name.trim().is_empty() {
+        return Err("Name is required".to_string());
+    }
+
     // 插入新订阅数据到数据库
     // Insert new subscription data into database
     let id = sqlx::query(

@@ -27,10 +27,20 @@ pub async fn init_db() -> Result<DbPool, sqlx::Error> {
     // Get DATABASE_URL from environment variables, use default if not present
     let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:wallet-os.db".to_string());
     
+    // 从 URL 解析数据库文件路径
+    // Parse database file path from URL
+    let db_path = database_url.strip_prefix("sqlite:").unwrap_or(&database_url);
+    
     // 如果数据库文件不存在，则创建它
     // Create the database file if it doesn't exist
-    if !std::path::Path::new("wallet-os.db").exists() {
-        std::fs::File::create("wallet-os.db").expect("Failed to create database file");
+    let path = std::path::Path::new(db_path);
+    if !path.exists() {
+        // 确保父目录存在
+        // Ensure parent directory exists
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).ok();
+        }
+        std::fs::File::create(path).expect("Failed to create database file");
     }
 
     // 配置并建立数据库连接池
@@ -48,7 +58,7 @@ pub async fn init_db() -> Result<DbPool, sqlx::Error> {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             price REAL NOT NULL,
-            currency TEXT DEFAULT 'USD',
+            currency TEXT DEFAULT 'CNY',
             next_payment DATE,
             frequency INTEGER DEFAULT 1, -- 1=Monthly, 12=Yearly etc, simplified for now
             url TEXT,
