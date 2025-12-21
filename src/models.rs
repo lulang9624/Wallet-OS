@@ -1,3 +1,5 @@
+/// 数据模型定义模块
+/// Data models definition module
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 

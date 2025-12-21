@@ -1,3 +1,5 @@
+/// 数据库连接管理模块
+/// Database connection management module
 use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::{Pool, Sqlite};
 use std::env;
@@ -10,25 +12,25 @@ pub type DbPool = Pool<Sqlite>;
 /// Initialize the database
 ///
 /// 该函数会：
-/// 1. 获取数据库 URL（默认为 sqlite:wallos.db）
+/// 1. 获取数据库 URL（默认为 sqlite:wallet-os.db）
 /// 2. 如果数据库文件不存在，则创建它
 /// 3. 创建连接池
 /// 4. 如果表不存在，则创建 subscriptions 表
 ///
 /// This function will:
-/// 1. Get database URL (defaults to sqlite:wallos.db)
+/// 1. Get database URL (defaults to sqlite:wallet-os.db)
 /// 2. Create the database file if it doesn't exist
 /// 3. Create a connection pool
 /// 4. Create the subscriptions table if it doesn't exist
 pub async fn init_db() -> Result<DbPool, sqlx::Error> {
     // 获取环境变量中的 DATABASE_URL，如果没有则使用默认值
     // Get DATABASE_URL from environment variables, use default if not present
-    let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:wallos.db".to_string());
+    let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:wallet-os.db".to_string());
     
     // 如果数据库文件不存在，则创建它
     // Create the database file if it doesn't exist
-    if !std::path::Path::new("wallos.db").exists() {
-        std::fs::File::create("wallos.db").expect("Failed to create database file");
+    if !std::path::Path::new("wallet-os.db").exists() {
+        std::fs::File::create("wallet-os.db").expect("Failed to create database file");
     }
 
     // 配置并建立数据库连接池

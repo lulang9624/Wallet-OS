@@ -1,7 +1,7 @@
 services:
-  # Wallos Next 应用服务
-  # Wallos Next application service
-  wallos-next:
+  # Wallet OS 应用服务
+  # Wallet OS application service
+  wallet-os:
     build: 
       context: .
       dockerfile: Dockerfile
@@ -12,7 +12,7 @@ services:
     # 数据卷挂载，持久化存储
     # Volume mounting for persistent storage
     volumes:
-      - wallos_data:/app
+      - wallet_os_data:/app
     # 容器停止后自动重启
     # Automatically restart unless explicitly stopped
     restart: unless-stopped
@@ -20,4 +20,4 @@ services:
 # 定义数据卷
 # Define volumes
 volumes:
-  wallos_data:
+  wallet_os_data:

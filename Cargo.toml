@@ -1,15 +1,41 @@
 [package]
-name = "wallos-next"
+name = "wallet-os"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+# 异步运行时，用于处理并发任务
+# Asynchronous runtime for handling concurrent tasks
 tokio = { version = "1.0", features = ["full"] }
+
+# Web 框架，用于构建 HTTP 服务器
+# Web framework for building HTTP servers
 axum = "0.7"
+
+# 数据库连接库，支持 SQLite 和异步操作
+# Database connection library, supporting SQLite and async operations
 sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio"] }
+
+# 序列化和反序列化框架
+# Serialization and deserialization framework
 serde = { version = "1.0", features = ["derive"] }
+
+# JSON 处理库
+# JSON handling library
 serde_json = "1.0"
+
+# HTTP 服务组件，提供静态文件服务和 CORS 支持
+# HTTP service components, providing static file serving and CORS support
 tower-http = { version = "0.5", features = ["fs", "cors", "trace"] }
+
+# 日志追踪库
+# Logging and tracing library
 tracing = "0.1"
+
+# 日志订阅者，用于格式化日志输出
+# Log subscriber for formatting log output
 tracing-subscriber = "0.3"
+
+# 时间处理库
+# Date and time handling library
 chrono = { version = "0.4", features = ["serde"] }
