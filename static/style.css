@@ -1,27 +1,60 @@
-/* 定义 CSS 变量，便于主题管理 */
-/* Define CSS variables for theme management */
+/* ==========================================================================
+   Wallet OS - Main Stylesheet
+   ========================================================================== */
+
+/* 
+ * 全局变量定义 (CSS Variables)
+ * 用于统一管理项目的主题颜色，方便后续进行深色/浅色模式切换或主题定制。
+ * Used for unified management of project theme colors.
+ */
 :root {
+    /* 页面背景色 - 深灰色 */
     --bg-color: #1a1a1a;
+    /* 卡片和模块的背景色 - 稍浅的灰色，用于区分层级 */
     --card-bg: #2d2d2d;
+    /* 主要文本颜色 - 浅灰白色，确保在深色背景下的可读性 */
     --text-color: #e0e0e0;
+    /* 强调色/主色调 - 绿色，用于按钮、价格和重要数据 */
     --accent: #4caf50;
+    /* 危险/错误颜色 - 红色，用于删除按钮和错误提示 */
+    --danger: #f44336;
+    /* 边框和辅助文本颜色 */
+    --border-color: #3d3d3d;
+    --text-muted: #aaa;
 }
+
+/* 
+ * 基础样式 (Base Styles)
+ * 设置全局的字体、背景和基本的盒模型属性。
+ */
 body {
     background-color: var(--bg-color);
     color: var(--text-color);
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     margin: 0;
     padding: 20px;
+    line-height: 1.6;
 }
-/* 响应式容器 */
-/* Responsive container */
+
+h1 { 
+    text-align: center; 
+    margin-bottom: 30px;
+}
+
+/* 
+ * 布局容器 (Layout Container)
+ * 限制内容的最大宽度并居中显示，适配不同屏幕尺寸。
+ */
 .container {
     max-width: 800px;
     margin: 0 auto;
+    padding: 0 10px; /* 在小屏幕上增加内边距 */
 }
-h1 { text-align: center; }
-/* 通用按钮样式 */
-/* Common button styles */
+
+/* 
+ * 按钮组件 (Button Components)
+ * 通用的按钮样式定义。
+ */
 .btn {
     background: var(--accent);
     color: white;
@@ -30,9 +63,55 @@ h1 { text-align: center; }
     border-radius: 5px;
     cursor: pointer;
     font-size: 1rem;
+    transition: background-color 0.3s ease; /* 增加悬停过渡效果 */
 }
-/* 订阅卡片样式 */
-/* Subscription card styles */
+
+.btn:hover {
+    filter: brightness(1.1); /* 鼠标悬停时稍微变亮 */
+}
+
+.btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* 
+ * 统计面板 (Stats Grid)
+ * 使用 Grid 布局展示总月费和年费等统计信息。
+ */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); /* 响应式列宽 */
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-box {
+    background: var(--card-bg);
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1); /* 增加轻微阴影 */
+}
+
+.stat-box h3 { 
+    color: var(--text-muted); 
+    font-size: 0.9rem; 
+    margin-top: 0; 
+    text-transform: uppercase; /* 标题大写 */
+    letter-spacing: 1px;
+}
+
+.stat-box .value { 
+    font-size: 2rem; 
+    font-weight: bold; 
+    color: var(--accent); 
+}
+
+/* 
+ * 订阅列表卡片 (Subscription Cards)
+ * 每一项订阅服务的展示样式。
+ */
 .sub-card {
     background: var(--card-bg);
     padding: 20px;
@@ -41,96 +120,137 @@ h1 { text-align: center; }
     display: flex;
     justify-content: space-between;
     align-items: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: transform 0.2s ease;
 }
-.sub-info h3 { margin: 0 0 5px 0; }
-.sub-price { font-size: 1.2rem; font-weight: bold; color: var(--accent); }
-/* 模态框样式 */
-/* Modal styles */
-.modal {
-    display: none;
-    position: fixed;
-    top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.7);
+
+.sub-card:hover {
+    transform: translateY(-2px); /* 鼠标悬停时轻微上浮 */
 }
-.modal-content {
-    background: var(--card-bg);
-    margin: 10% auto;
-    padding: 20px;
-    width: 90%;
-    max-width: 500px;
-    border-radius: 10px;
+
+.sub-info h3 { 
+    margin: 0 0 5px 0; 
+    font-size: 1.2rem;
 }
+
+.sub-price { 
+    font-size: 1.2rem; 
+    font-weight: bold; 
+    color: var(--accent); 
+}
+
+/* 
+ * 表单元素 (Form Elements)
+ * 输入框和下拉选择框的统一样式。
+ */
 input, select {
     width: 100%;
     padding: 10px;
     margin: 10px 0;
-    background: #3d3d3d;
-    border: none;
+    background: var(--border-color);
+    border: 1px solid transparent; /* 预留边框位置用于错误状态 */
     color: white;
     border-radius: 5px;
+    box-sizing: border-box; /* 确保 padding 不会撑大宽度 */
 }
-/* 统计数据网格布局 */
-/* Stats grid layout */
-.stats-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-    margin-bottom: 30px;
+
+input:focus, select:focus {
+    outline: none;
+    border-color: var(--accent); /* 聚焦时显示强调色边框 */
 }
-.stat-box {
-    background: var(--card-bg);
-    padding: 20px;
-    border-radius: 10px;
-    text-align: center;
-}
-.stat-box h3 { color: #aaa; font-size: 0.9rem; margin-top: 0; }
-.stat-box .value { font-size: 2rem; font-weight: bold; color: var(--accent); }
-/* 错误提示样式 */
-/* Error message styles */
+
+/* 
+ * 表单验证错误样式 (Validation Errors)
+ */
 .input-error {
-    border: 1px solid #f44336 !important;
+    border: 1px solid var(--danger) !important;
 }
+
 .error-msg {
-    color: #f44336;
+    color: var(--danger);
     font-size: 0.85rem;
-    margin-top: -8px;
-    margin-bottom: 10px;
-    display: none;
+    margin-top: -5px;
+    margin-bottom: 15px;
+    display: none; /* 默认隐藏 */
 }
-/* 电池图标样式 */
-/* Battery icon styles */
+
+/* 
+ * 模态框 (Modal)
+ * 用于添加订阅和删除确认的弹出窗口。
+ */
+.modal {
+    display: none; /* 默认隐藏 */
+    position: fixed;
+    z-index: 1000; /* 确保在最顶层 */
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%;
+    background: rgba(0,0,0,0.7); /* 半透明遮罩 */
+    backdrop-filter: blur(5px); /* 背景模糊效果 */
+}
+
+.modal-content {
+    background: var(--card-bg);
+    margin: 10% auto;
+    padding: 30px;
+    width: 90%;
+    max-width: 500px;
+    border-radius: 10px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from { transform: translateY(-30px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+/* 
+ * 电池电量动画组件 (Battery Animation)
+ * 用于直观展示订阅剩余时间的视觉组件。
+ */
 .battery-container {
     display: inline-flex;
     align-items: center;
-    margin-left: 10px;
+    margin-left: 15px;
+    vertical-align: middle;
 }
+
 .battery {
     width: 30px;
     height: 14px;
-    border: 2px solid #aaa;
+    border: 2px solid var(--text-muted);
     border-radius: 3px;
     position: relative;
     padding: 1px;
-    margin-right: 4px;
+    margin-right: 6px;
 }
+
+/* 电池正极头 */
 .battery::after {
     content: '';
     position: absolute;
-    right: -4px;
+    right: -5px;
     top: 3px;
-    width: 2px;
+    width: 3px;
     height: 6px;
-    background: #aaa;
+    background: var(--text-muted);
     border-radius: 0 2px 2px 0;
 }
+
+/* 电池电量条 - 宽度由 JS 动态控制 */
 .battery-level {
     height: 100%;
-    background: #4caf50;
+    background: var(--accent);
     border-radius: 1px;
-    width: 0%; /* JS will set this */
+    width: 0%; 
     transition: width 1s ease-in-out, background-color 0.5s ease;
 }
+
+/* 剩余天数文字 */
 .days-left {
     font-size: 0.8rem;
-    color: #aaa;
+    color: var(--text-muted);
+    font-weight: 500;
 }

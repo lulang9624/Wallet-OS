@@ -2,25 +2,43 @@ services:
   # Wallet OS 应用服务
   # Wallet OS application service
   wallet-os:
+    # 构建配置
+    # Build configuration
     build: 
       context: .
       dockerfile: Dockerfile
-    # 端口映射: 主机 8081 -> 容器 80
-    # Port mapping: Host 8081 -> Container 80
+    
+    # 端口映射
+    # Port mapping
+    # 将宿主机的 8081 端口映射到容器的 80 端口
+    # Map host port 8081 to container port 80
     ports:
       - "8081:80"
-    # 数据卷挂载，持久化存储
-    # Volume mounting for persistent storage
+    
+    # 数据卷挂载
+    # Volume mounting
+    # 1. wallet_os_data:/app/data -> 持久化存储数据库文件，防止重启丢失数据
+    #    Persist database file to avoid data loss on restart
+    # 2. ./static:/app/static -> 将本地 static 目录挂载到容器，方便开发调试前端代码
+    #    Mount local static dir to container for frontend development debugging
     volumes:
       - ./wallet_os_data:/app/data
       - ./static:/app/static
+    
+    # 环境变量配置
+    # Environment variables
+    # 指定数据库文件的存放位置（需与上面的 volumes 挂载路径对应）
+    # Specify database file location (must match volume mount path)
     environment:
       - DATABASE_URL=sqlite:/app/data/wallet-os.db
-    # 容器停止后自动重启
+    
+    # 重启策略
+    # Restart policy
+    # 除非被手动停止，否则自动重启（例如崩溃或系统重启后）
     # Automatically restart unless explicitly stopped
     restart: unless-stopped
 
-# 定义数据卷
-# Define volumes
+# 定义命名数据卷
+# Define named volumes
 volumes:
   wallet_os_data:

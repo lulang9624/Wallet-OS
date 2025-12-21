@@ -2,6 +2,8 @@
 
 Wallet OS 是一个简单的个人财务和订阅管理工具，旨在帮助您跟踪每月的固定支出。
 
+灵感来源 wallos 项目，Vibe Coding 进行开发
+
 ## 🛠️ 技术栈 (Tech Stack)
 
 本项目采用现代化的 Rust 技术栈构建：

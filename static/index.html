@@ -4,14 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wallos Next</title>
+    <!-- 引入外部样式表 (Import external stylesheet) -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
         <h1>Wallet OS</h1>
         
-        <!-- 统计展示区域 -->
-        <!-- Statistics display area -->
+        <!-- 统计展示区域 (Statistics Display Area) -->
+        <!-- 用于显示总月费和活跃订阅数量 -->
         <div class="stats-grid">
             <div class="stat-box">
                 <h3>Total Monthly</h3>
@@ -23,21 +24,28 @@
             </div>
         </div>
 
+        <!-- 操作按钮区域 (Action Button Area) -->
         <div style="text-align: right; margin-bottom: 20px;">
             <button class="btn" onclick="openModal()">+ Add Subscription</button>
         </div>
-        <!-- 订阅列表容器 -->
-        <!-- Subscription list container -->
+
+        <!-- 订阅列表容器 (Subscription List Container) -->
+        <!-- JS 将会动态把订阅卡片插入到这里 -->
         <div id="subs-list">Loading...</div>
     </div>
 
-    <!-- 添加订阅的模态框 -->
-    <!-- Add subscription modal -->
+    <!-- 添加订阅模态框 (Add Subscription Modal) -->
+    <!-- 默认隐藏，点击 "+ Add Subscription" 按钮后显示 -->
     <div id="addModal" class="modal">
         <div class="modal-content">
             <h2>New Subscription</h2>
+            
+            <!-- 订阅表单 -->
+            <!-- Subscription Form -->
             <input type="text" id="name" placeholder="Name (e.g. Netflix)" oninput="clearError()">
+            <!-- 错误提示信息 -->
             <div id="name-error" class="error-msg">Name is required</div>
+            
             <input type="number" id="price" placeholder="Price">
             <input type="text" id="currency" value="CNY" placeholder="Currency">
             <select id="frequency">
@@ -45,80 +53,113 @@
                 <option value="12">Yearly</option>
             </select>
             <input type="date" id="next_payment">
+            
             <button class="btn" onclick="addSubscription()">Save</button>
             <button class="btn" style="background: #666;" onclick="closeModal()">Cancel</button>
         </div>
     </div>
 
-    <!-- 删除确认模态框 -->
-    <!-- Delete confirmation modal -->
+    <!-- 删除确认模态框 (Delete Confirmation Modal) -->
+    <!-- 防止误删操作，要求用户输入订阅名称进行确认 -->
     <div id="deleteModal" class="modal">
         <div class="modal-content">
             <h2>Delete Subscription</h2>
             <p>To confirm deletion, type <strong id="delete-match-name" style="color: var(--accent);"></strong> below:</p>
             <input type="text" id="delete-confirm-input" placeholder="Type subscription name">
+            
             <div style="text-align: right; margin-top: 15px;">
+                <!-- 确认删除按钮，默认禁用 -->
                 <button id="btn-confirm-delete" class="btn" style="background: #f44336; opacity: 0.5; cursor: not-allowed;" disabled onclick="executeDelete()">Delete</button>
                 <button class="btn" style="background: #666;" onclick="closeDeleteModal()">Cancel</button>
             </div>
         </div>
     </div>
 
+    <!-- JavaScript 逻辑部分 -->
     <script>
+        // API 基础路径
         const API = '/api/subscriptions';
-        let currentSubs = []; // Store current subscriptions globally
+        
+        // 全局变量，用于存储当前获取到的订阅列表，方便后续查找（如删除确认时比对名称）
+        // Global variable to store current subscriptions for easy lookup
+        let currentSubs = []; 
 
-        // 获取并渲染订阅列表
-        // Fetch and render subscription list
+        /**
+         * 获取并渲染订阅列表
+         * Fetch and render subscription list
+         */
         async function fetchSubs() {
-            const res = await fetch(API);
-            const data = await res.json();
-            currentSubs = data; // Save data
-            renderStats(data);
-            const list = document.getElementById('subs-list');
-            list.innerHTML = '';
-            data.forEach(sub => {
-                let freqLabel = sub.frequency === 12 ? '/yr' : '/mo';
+            try {
+                // 发送 GET 请求获取数据
+                const res = await fetch(API);
+                const data = await res.json();
                 
-                // 计算电池状态
-                // Calculate battery status
-                const batteryHtml = getBatteryHtml(sub.next_payment, sub.frequency);
-
-                list.innerHTML += `
-                    <div class="sub-card">
-                        <div class="sub-info">
-                            <div style="display:flex;align-items:center;">
-                                <h3>${sub.name}</h3>
-                                ${batteryHtml}
+                // 更新全局数据
+                currentSubs = data; 
+                
+                // 计算并渲染统计数据
+                renderStats(data);
+                
+                const list = document.getElementById('subs-list');
+                list.innerHTML = ''; // 清空现有列表
+                
+                // 遍历并生成 HTML
+                data.forEach(sub => {
+                    let freqLabel = sub.frequency === 12 ? '/yr' : '/mo';
+                    
+                    // 计算电池状态 HTML
+                    // Calculate battery status HTML
+                    const batteryHtml = getBatteryHtml(sub.next_payment, sub.frequency);
+    
+                    // 拼接卡片 HTML
+                    list.innerHTML += `
+                        <div class="sub-card">
+                            <div class="sub-info">
+                                <div style="display:flex;align-items:center;">
+                                    <h3>${sub.name}</h3>
+                                    ${batteryHtml}
+                                </div>
+                                <small>Next: ${sub.next_payment || 'N/A'}</small>
                             </div>
-                            <small>Next: ${sub.next_payment || 'N/A'}</small>
+                            <div style="text-align: right;">
+                                <div class="sub-price">${sub.currency} ${sub.price}<span style="font-size:0.8rem;color:#aaa">${freqLabel}</span></div>
+                                <!-- 删除按钮，点击触发 openDeleteModal -->
+                                <button style="background:none; border:none; color:#f44336; cursor:pointer;" onclick="openDeleteModal(${sub.id})">Delete</button>
+                            </div>
                         </div>
-                        <div style="text-align: right;">
-                            <div class="sub-price">${sub.currency} ${sub.price}<span style="font-size:0.8rem;color:#aaa">${freqLabel}</span></div>
-                            <button style="background:none; border:none; color:#f44336; cursor:pointer;" onclick="openDeleteModal(${sub.id})">Delete</button>
-                        </div>
-                    </div>
-                `;
-            });
-            
-            // 触发动画
-            // Trigger animation
-            setTimeout(() => {
-                document.querySelectorAll('.battery-level').forEach(el => {
-                    el.style.width = el.getAttribute('data-width');
+                    `;
                 });
-            }, 100);
+                
+                // 触发电池条动画 (延迟执行以确保 DOM 已渲染)
+                // Trigger battery animation
+                setTimeout(() => {
+                    document.querySelectorAll('.battery-level').forEach(el => {
+                        el.style.width = el.getAttribute('data-width');
+                    });
+                }, 100);
+            } catch (error) {
+                console.error("Failed to fetch subscriptions:", error);
+                document.getElementById('subs-list').innerText = "Failed to load data.";
+            }
         }
 
-        // 计算电池 HTML
-        // Calculate Battery HTML
+        /**
+         * 生成电池图标 HTML
+         * Generate Battery Icon HTML
+         * 
+         * 根据剩余天数和周期计算电量百分比和颜色。
+         * Calculates percentage and color based on days left and cycle.
+         * 
+         * @param {string} nextDateStr - 下次付款日期字符串
+         * @param {number} frequency - 付款频率 (1=月, 12=年)
+         */
         function getBatteryHtml(nextDateStr, frequency) {
             if (!nextDateStr) return '';
             
             const nextDate = new Date(nextDateStr);
             const now = new Date();
             
-            // 重置时间部分，只比较日期
+            // 重置时间部分，只比较日期，避免因时分秒导致的计算偏差
             // Reset time part, only compare dates
             nextDate.setHours(0,0,0,0);
             now.setHours(0,0,0,0);
@@ -126,8 +167,8 @@
             let diffTime = nextDate - now;
             let diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             
-            // 如果过期了
-            // If overdue
+            // 处理已过期的情况
+            // Handle overdue cases
             if (diffDays < 0) {
                 return `
                     <div class="battery-container" title="Overdue">
@@ -139,19 +180,17 @@
                 `;
             }
 
-            // 计算周期长度（天）
-            // Calculate cycle length (days)
-            // 简单处理：月付30天，年付365天
-            // Simple logic: Monthly 30 days, Yearly 365 days
+            // 估算周期长度（天）用于计算百分比
+            // Estimate cycle length (days) for percentage calculation
             const cycleDays = frequency === 12 ? 365 : 30;
             
             // 计算百分比 (剩余天数 / 周期)
             // Calculate percentage (days left / cycle)
             let percentage = (diffDays / cycleDays) * 100;
-            if (percentage > 100) percentage = 100; // 防止刚续费显示溢出
+            if (percentage > 100) percentage = 100; // 防止新续费时溢出
             
-            // 确定颜色
-            // Determine color
+            // 根据剩余电量确定颜色 (绿 -> 橙 -> 红)
+            // Determine color based on level
             let color = '#4caf50'; // Green
             if (percentage < 20) {
                 color = '#f44336'; // Red
@@ -162,6 +201,7 @@
             return `
                 <div class="battery-container" title="${diffDays} days left">
                     <div class="battery">
+                        <!-- data-width 用于 JS 动画 -->
                         <div class="battery-level" style="background: ${color}; width: 0%" data-width="${percentage}%"></div>
                     </div>
                     <span class="days-left">${diffDays}d</span>
@@ -169,15 +209,19 @@
             `;
         }
 
-        // 计算并显示统计数据
-        // Calculate and display statistics
+        /**
+         * 计算并显示统计数据
+         * Calculate and display statistics
+         */
         function renderStats(subs) {
             let total = 0;
+            // 简单取第一个订阅的货币单位，实际应用可能需要更复杂的货币转换逻辑
+            // Simply use the currency of the first subscription
             let currency = subs.length > 0 ? subs[0].currency : 'CNY';
             
             subs.forEach(sub => {
-                // 如果是年付，转换为月均成本
-                // If yearly payment, convert to monthly cost
+                // 将年付金额分摊到每月
+                // Amortize yearly payments to monthly
                 if(sub.frequency === 12) {
                     total += sub.price / 12;
                 } else {
@@ -188,22 +232,28 @@
             document.getElementById('active-count').innerText = subs.length;
         }
 
-        // 添加新订阅
-        // Add new subscription
+        /**
+         * 添加新订阅
+         * Add new subscription
+         */
         async function addSubscription() {
             const nameInput = document.getElementById('name');
             const errorMsg = document.getElementById('name-error');
             const name = nameInput.value;
             
+            // 必填校验
+            // Validation
             if (!name || name.trim() === '') {
                 nameInput.classList.add('input-error');
                 errorMsg.style.display = 'block';
                 return;
             }
 
+            // 构建请求载荷
+            // Build payload
             const payload = {
                 name: name,
-                price: parseFloat(document.getElementById('price').value),
+                price: parseFloat(document.getElementById('price').value) || 0,
                 currency: document.getElementById('currency').value,
                 next_payment: document.getElementById('next_payment').value,
                 frequency: parseInt(document.getElementById('frequency').value),
@@ -211,6 +261,7 @@
                 logo: ""
             };
 
+            // 发送 POST 请求
             const res = await fetch(API, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -224,25 +275,33 @@
             }
 
             closeModal();
-            fetchSubs();
+            fetchSubs(); // 刷新列表
         }
 
-        // 删除相关变量和逻辑
-        // Delete related variables and logic
+        // ==============================
+        // 删除功能相关的逻辑 (Delete Logic)
+        // ==============================
         let deleteTargetId = null;
         let deleteTargetName = '';
 
+        /**
+         * 打开删除确认模态框
+         * Open delete confirmation modal
+         */
         function openDeleteModal(id) {
+            // 在全局数据中查找该订阅
             const sub = currentSubs.find(s => s.id === id);
             if(!sub) return;
 
             deleteTargetId = id;
             deleteTargetName = sub.name;
 
+            // 更新 UI
             document.getElementById('delete-match-name').innerText = sub.name;
             const input = document.getElementById('delete-confirm-input');
-            input.value = '';
+            input.value = ''; // 清空输入框
             
+            // 重置删除按钮状态（禁用）
             const btn = document.getElementById('btn-confirm-delete');
             btn.disabled = true;
             btn.style.opacity = '0.5';
@@ -257,11 +316,14 @@
             deleteTargetName = '';
         }
 
-        // 监听输入以匹配名称
-        // Listen to input to match name
+        // 监听输入框，匹配订阅名称
+        // Listen to input to match subscription name
         document.getElementById('delete-confirm-input').addEventListener('input', function(e) {
             const val = e.target.value;
             const btn = document.getElementById('btn-confirm-delete');
+            
+            // 只有输入内容完全匹配订阅名称时，才启用删除按钮
+            // Enable delete button only if input matches name exactly
             if(val === deleteTargetName) {
                 btn.disabled = false;
                 btn.style.opacity = '1';
@@ -273,28 +335,35 @@
             }
         });
 
-        // 执行删除
-        // Execute delete
+        /**
+         * 执行真正的删除操作
+         * Execute actual delete operation
+         */
         async function executeDelete() {
             if(!deleteTargetId) return;
             await fetch(`${API}/${deleteTargetId}`, { method: 'DELETE' });
             closeDeleteModal();
-            fetchSubs();
+            fetchSubs(); // 刷新列表
         }
 
-        // 模态框控制函数
-        // Modal control functions
+        // ==============================
+        // 通用模态框控制 (Modal Controls)
+        // ==============================
         function openModal() { 
             clearError();
+            // 重置表单
             document.getElementById('name').value = '';
             document.getElementById('price').value = '';
-            // Reset other fields if needed
+            // 显示模态框
             document.getElementById('addModal').style.display = 'block'; 
         }
-        function closeModal() { document.getElementById('addModal').style.display = 'none'; }
         
-        // 清除错误提示
-        // Clear error message
+        function closeModal() { 
+            document.getElementById('addModal').style.display = 'none'; 
+        }
+        
+        // 清除表单错误样式
+        // Clear form error styles
         function clearError() {
             const nameInput = document.getElementById('name');
             const errorMsg = document.getElementById('name-error');
@@ -302,8 +371,8 @@
             errorMsg.style.display = 'none';
         }
 
-        // 页面加载时获取数据
-        // Fetch data on page load
+        // 页面加载完成后立即获取数据
+        // Fetch data immediately on page load
         fetchSubs();
     </script>
 </body>

@@ -1,38 +1,50 @@
 /// 数据库连接管理模块
 /// Database connection management module
+///
+/// 负责初始化数据库连接池、创建数据库文件（如果不存在）以及执行数据库迁移（创建表结构）。
+/// Handles database connection pool initialization, database file creation (if missing),
+/// and database migrations (table schema creation).
+
 use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::{Pool, Sqlite};
 use std::env;
 
 /// 定义数据库连接池类型别名
 /// Define type alias for database connection pool
+/// 
+/// 使用 `Pool<Sqlite>` 表示 SQLite 数据库的连接池。
+/// Uses `Pool<Sqlite>` to represent the connection pool for SQLite database.
 pub type DbPool = Pool<Sqlite>;
 
 /// 初始化数据库
 /// Initialize the database
 ///
-/// 该函数会：
-/// 1. 获取数据库 URL（默认为 sqlite:wallet-os.db）
-/// 2. 如果数据库文件不存在，则创建它
-/// 3. 创建连接池
-/// 4. 如果表不存在，则创建 subscriptions 表
+/// 该函数会执行以下步骤：
+/// 1. 获取数据库连接 URL（优先读取 `DATABASE_URL` 环境变量）。
+/// 2. 检查数据库文件是否存在，如果不存在则自动创建文件及父目录。
+/// 3. 创建并配置 SQLite 连接池。
+/// 4. 运行 SQL 脚本以确保 `subscriptions` 表存在。
 ///
-/// This function will:
-/// 1. Get database URL (defaults to sqlite:wallet-os.db)
-/// 2. Create the database file if it doesn't exist
-/// 3. Create a connection pool
-/// 4. Create the subscriptions table if it doesn't exist
+/// This function performs the following steps:
+/// 1. Retrieves the database URL (prefers `DATABASE_URL` environment variable).
+/// 2. Checks if the database file exists; creates it and parent directories if missing.
+/// 3. Creates and configures the SQLite connection pool.
+/// 4. Runs SQL scripts to ensure the `subscriptions` table exists.
 pub async fn init_db() -> Result<DbPool, sqlx::Error> {
-    // 获取环境变量中的 DATABASE_URL，如果没有则使用默认值
-    // Get DATABASE_URL from environment variables, use default if not present
+    // 1. 获取数据库配置
+    //    Get database configuration
+    //    默认为 "sqlite:wallet-os.db"
+    //    Defaults to "sqlite:wallet-os.db"
     let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:wallet-os.db".to_string());
     
-    // 从 URL 解析数据库文件路径
-    // Parse database file path from URL
+    // 2. 处理数据库文件路径
+    //    Handle database file path
+    //    去除 "sqlite:" 前缀以获取文件系统路径
+    //    Strip "sqlite:" prefix to get the filesystem path
     let db_path = database_url.strip_prefix("sqlite:").unwrap_or(&database_url);
     
-    // 如果数据库文件不存在，则创建它
-    // Create the database file if it doesn't exist
+    // 检查并创建数据库文件
+    // Check and create database file
     let path = std::path::Path::new(db_path);
     if !path.exists() {
         // 确保父目录存在
@@ -40,18 +52,24 @@ pub async fn init_db() -> Result<DbPool, sqlx::Error> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).ok();
         }
+        // 创建空文件
+        // Create empty file
         std::fs::File::create(path).expect("Failed to create database file");
     }
 
-    // 配置并建立数据库连接池
-    // Configure and establish database connection pool
+    // 3. 创建连接池
+    //    Create connection pool
+    //    max_connections(10): 设置最大并发连接数为 10
+    //    max_connections(10): Sets maximum concurrent connections to 10
     let pool = SqlitePoolOptions::new()
         .max_connections(10)
         .connect(&database_url)
         .await?;
 
-    // 如果表不存在则创建
-    // Create tables if they don't exist
+    // 4. 数据库迁移 (创建表)
+    //    Database Migration (Create Table)
+    //    使用 `CREATE TABLE IF NOT EXISTS` 确保表结构存在。
+    //    Uses `CREATE TABLE IF NOT EXISTS` to ensure table schema exists.
     sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS subscriptions (
@@ -60,7 +78,7 @@ pub async fn init_db() -> Result<DbPool, sqlx::Error> {
             price REAL NOT NULL,
             currency TEXT DEFAULT 'CNY',
             next_payment DATE,
-            frequency INTEGER DEFAULT 1, -- 1=Monthly, 12=Yearly etc, simplified for now
+            frequency INTEGER DEFAULT 1, -- 1=月付 Monthly, 12=年付 Yearly
             url TEXT,
             logo TEXT,
             active BOOLEAN DEFAULT 1
