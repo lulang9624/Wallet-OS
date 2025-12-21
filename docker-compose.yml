@@ -1,0 +1,13 @@
+services:
+  wallos-next:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8081:80"
+    volumes:
+      - wallos_data:/app
+    restart: unless-stopped
+
+volumes:
+  wallos_data:
