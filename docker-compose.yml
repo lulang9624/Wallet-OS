@@ -1,13 +1,23 @@
 services:
+  # Wallos Next 应用服务
+  # Wallos Next application service
   wallos-next:
     build: 
       context: .
       dockerfile: Dockerfile
+    # 端口映射: 主机 8081 -> 容器 80
+    # Port mapping: Host 8081 -> Container 80
     ports:
       - "8081:80"
+    # 数据卷挂载，持久化存储
+    # Volume mounting for persistent storage
     volumes:
       - wallos_data:/app
+    # 容器停止后自动重启
+    # Automatically restart unless explicitly stopped
     restart: unless-stopped
 
+# 定义数据卷
+# Define volumes
 volumes:
   wallos_data:
