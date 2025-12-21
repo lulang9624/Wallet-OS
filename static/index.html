@@ -42,7 +42,7 @@
             
             <!-- 订阅表单 -->
             <!-- Subscription Form -->
-            <input type="text" id="name" placeholder="Name (e.g. Netflix)" oninput="clearError()">
+            <input type="text" id="name" placeholder="Name (e.g. Netflix)" oninput="clearError()" onblur="prefillUrl()">
             <!-- 错误提示信息 -->
             <div id="name-error" class="error-msg">Name is required</div>
             
@@ -53,8 +53,9 @@
                 <option value="12">Yearly</option>
             </select>
             <input type="date" id="next_payment">
+            <input type="text" id="url" placeholder="Website URL (optional, for better logo match)">
             
-            <button class="btn" onclick="addSubscription()">Save</button>
+            <button id="btn-save" class="btn" onclick="addSubscription()">Save</button>
             <button class="btn" style="background: #666;" onclick="closeModal()">Cancel</button>
         </div>
     </div>
@@ -83,6 +84,10 @@
         // 全局变量，用于存储当前获取到的订阅列表，方便后续查找（如删除确认时比对名称）
         // Global variable to store current subscriptions for easy lookup
         let currentSubs = []; 
+        
+        // 搜索结果缓存 (存储 Promise 以避免并发请求)
+        // Search result cache (stores Promise to avoid concurrent requests)
+        let searchCache = {};
 
         /**
          * 获取并渲染订阅列表
@@ -111,11 +116,30 @@
                     // Calculate battery status HTML
                     const batteryHtml = getBatteryHtml(sub.next_payment, sub.frequency);
     
+                    // 获取 Logo URL (如果数据库中没有 logo 字段，则自动生成)
+                    // Get Logo URL (auto-generate if missing in DB)
+                    const logoUrl = getLogoUrl(sub);
+
                     // 拼接卡片 HTML
                     list.innerHTML += `
                         <div class="sub-card">
                             <div class="sub-info">
                                 <div style="display:flex;align-items:center;">
+                                    <!-- 显示 Logo，支持三级回退策略：Google -> DuckDuckGo -> UI Avatars -->
+                                    <img src="${logoUrl}" class="sub-logo" 
+                                         onerror="
+                                            // 第一次失败：尝试 DuckDuckGo
+                                            if(!this.dataset.triedDd) {
+                                                this.dataset.triedDd = true;
+                                                let domain = '${logoUrl}'.match(/domain=([^&]+)/)[1];
+                                                this.src = 'https://icons.duckduckgo.com/ip3/' + domain + '.ico';
+                                            } 
+                                            // 第二次失败：使用 UI Avatars 显示首字母
+                                            else {
+                                                this.onerror=null;
+                                                this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(sub.name)}&background=random&color=fff&size=64&rounded=true';
+                                            }
+                                         " />
                                     <h3>${sub.name}</h3>
                                     ${batteryHtml}
                                 </div>
@@ -210,6 +234,99 @@
         }
 
         /**
+         * 获取订阅图标 URL
+         * Get Subscription Logo URL
+         * 
+         * 逻辑：
+         * 1. 如果数据库中有 logo 字段，直接使用
+         * 2. 如果有 url 字段，提取域名并调用 Clearbit API
+         * 3. 如果只有 name，尝试猜测域名 (name + .com) 并调用 Clearbit API
+         * 
+         * Logic:
+         * 1. Use DB logo if available.
+         * 2. If url exists, extract domain and use Clearbit API.
+         * 3. If only name, guess domain (name.com) and use Clearbit API.
+         */
+        function getLogoUrl(sub) {
+            // 1. 优先使用已保存的 Logo
+            if (sub.logo && sub.logo.trim() !== '') {
+                return sub.logo;
+            }
+
+            let domain = '';
+
+            // 2. 尝试从 URL 提取域名
+            if (sub.url && sub.url.trim() !== '') {
+                try {
+                    // 处理没有 http 前缀的情况
+                    let urlStr = sub.url;
+                    if (!urlStr.startsWith('http')) {
+                        urlStr = 'https://' + urlStr;
+                    }
+                    const urlObj = new URL(urlStr);
+                    domain = urlObj.hostname;
+                    
+                    // 修正：如果域名不包含点（例如用户只输入了 "icloud"），自动补全 .com
+                    // Fix: If domain has no dot (e.g. user entered "icloud"), append .com
+                    if (domain && !domain.includes('.')) {
+                        domain += '.com';
+                    }
+                } catch (e) {
+                    console.warn("Invalid URL:", sub.url);
+                }
+            }
+
+            // 3. 如果没有 URL，根据名称猜测域名
+            if (!domain) {
+                const cleanName = sub.name.toLowerCase().replace(/\s+/g, '');
+                // 默认猜测：名称 + .com
+                // Default guess: name + .com
+                domain = cleanName + '.com';
+            }
+
+            // 使用 Google Favicon 服务作为首选 (更稳定)
+            // Use Google Favicon service as primary (more stable)
+            return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+        }
+
+        /**
+         * 在线搜索公司信息 (调用后端 API)
+         * Online search for company info via Backend API
+         *
+         * 使用 Promise 缓存机制，确保同一个名称只发起一次请求
+         * Uses Promise caching to ensure only one request per name
+         */
+        function searchCompany(name) {
+            // 1. 检查缓存中是否已有 Promise
+            if (searchCache[name]) {
+                return searchCache[name];
+            }
+
+            // 2. 创建新的 Promise 并存入缓存
+            const promise = (async () => {
+                try {
+                    const res = await fetch(`/api/search?q=${encodeURIComponent(name)}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data && data.domain) {
+                            return {
+                                name: name,
+                                domain: data.domain,
+                                logo: `https://www.google.com/s2/favicons?domain=${data.domain}&sz=64`
+                            };
+                        }
+                    }
+                } catch (e) {
+                    console.warn("Company search failed:", e);
+                }
+                return null;
+            })();
+
+            searchCache[name] = promise;
+            return promise;
+        }
+
+        /**
          * 计算并显示统计数据
          * Calculate and display statistics
          */
@@ -233,49 +350,106 @@
         }
 
         /**
+         * 在输入框失去焦点时预先搜索 URL
+         * Prefill URL when input loses focus
+         */
+        async function prefillUrl() {
+            const name = document.getElementById('name').value.trim();
+            const urlInput = document.getElementById('url');
+            
+            if (!name || urlInput.value.trim() !== '') return;
+
+            // 显示一个临时的占位符
+            const originalPlaceholder = urlInput.placeholder;
+            urlInput.placeholder = "Searching domain...";
+
+            // 发起搜索 (如果已有请求在进行中，会直接等待该请求)
+            const result = await searchCompany(name);
+            
+            if (result && result.domain) {
+                // 双重检查：确保此时 URL 还是空的 (用户可能在等待期间手动输入了)
+                if (urlInput.value.trim() === '') {
+                    urlInput.value = 'https://' + result.domain;
+                    urlInput.style.borderColor = '#4caf50';
+                    setTimeout(() => urlInput.style.borderColor = '#333', 1000);
+                }
+            }
+
+            urlInput.placeholder = originalPlaceholder;
+        }
+
+        /**
          * 添加新订阅
          * Add new subscription
          */
         async function addSubscription() {
+            const btnSave = document.getElementById('btn-save');
             const nameInput = document.getElementById('name');
             const errorMsg = document.getElementById('name-error');
             const name = nameInput.value;
             
-            // 必填校验
-            // Validation
             if (!name || name.trim() === '') {
                 nameInput.classList.add('input-error');
                 errorMsg.style.display = 'block';
                 return;
             }
 
-            // 构建请求载荷
-            // Build payload
-            const payload = {
-                name: name,
-                price: parseFloat(document.getElementById('price').value) || 0,
-                currency: document.getElementById('currency').value,
-                next_payment: document.getElementById('next_payment').value,
-                frequency: parseInt(document.getElementById('frequency').value),
-                url: "",
-                logo: ""
-            };
+            const originalBtnText = btnSave.innerText;
+            btnSave.disabled = true;
+            btnSave.innerText = "Processing...";
+            btnSave.style.opacity = "0.7";
+            btnSave.style.cursor = "not-allowed";
 
-            // 发送 POST 请求
-            const res = await fetch(API, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
+            try {
+                const payload = {
+                    name: name,
+                    price: parseFloat(document.getElementById('price').value) || 0,
+                    currency: document.getElementById('currency').value,
+                    next_payment: document.getElementById('next_payment').value,
+                    frequency: parseInt(document.getElementById('frequency').value),
+                    url: document.getElementById('url').value || "",
+                    logo: ""
+                };
 
-            if (!res.ok) {
-                const errorText = await res.text();
-                alert('Error adding subscription: ' + errorText);
-                return;
+                // 如果没有 URL，尝试获取搜索结果
+                if (!payload.url) {
+                    btnSave.innerText = "Searching Domain...";
+                    // 这里直接 await searchCompany
+                    // 如果 prefillUrl 已经触发了搜索，这里会瞬间返回同一个 Promise 的结果
+                    // If prefillUrl already triggered search, this returns the same Promise result instantly
+                    const companyInfo = await searchCompany(name);
+
+                    if (companyInfo && companyInfo.domain) {
+                        payload.url = 'https://' + companyInfo.domain;
+                        payload.logo = companyInfo.logo;
+                        console.log(`Auto-matched: ${companyInfo.domain}`);
+                    }
+                }
+
+                btnSave.innerText = "Saving...";
+                const res = await fetch(API, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!res.ok) {
+                    const errorText = await res.text();
+                    alert('Error adding subscription: ' + errorText);
+                    return;
+                }
+
+                closeModal();
+                fetchSubs(); 
+            } catch (error) {
+                console.error("Error:", error);
+                alert("An unexpected error occurred.");
+            } finally {
+                btnSave.disabled = false;
+                btnSave.innerText = originalBtnText;
+                btnSave.style.opacity = "1";
+                btnSave.style.cursor = "pointer";
             }
-
-            closeModal();
-            fetchSubs(); // 刷新列表
         }
 
         // ==============================
@@ -354,6 +528,7 @@
             // 重置表单
             document.getElementById('name').value = '';
             document.getElementById('price').value = '';
+            document.getElementById('url').value = ''; // Reset URL field
             // 显示模态框
             document.getElementById('addModal').style.display = 'block'; 
         }

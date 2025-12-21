@@ -40,6 +40,10 @@ async fn main() {
         // API 路由：根据 ID 删除特定订阅 (DELETE)
         // API Routes: Delete a specific subscription by ID (DELETE)
         .route("/api/subscriptions/:id", delete(handlers::delete_subscription))
+
+        // API 路由：搜索域名 (GET)
+        // API Routes: Search domain (GET)
+        .route("/api/search", get(handlers::search_domain))
         
         // 静态文件服务
         // 将根路径 "/" 映射到本地的 "static" 目录，用于托管前端页面 (HTML, CSS, JS)。

@@ -7,9 +7,192 @@
 use crate::db::DbPool;
 use crate::models::{CreateSubscription, Subscription};
 use axum::{
-    extract::{Path, State},
+    extract::{Path, State, Query},
     Json,
 };
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize)]
+pub struct SearchQuery {
+    q: String,
+}
+
+#[derive(Serialize)]
+pub struct SearchResult {
+    domain: String,
+}
+
+/// 搜索域名 API (GET /api/search?q=name)
+/// Search Domain API
+///
+/// 使用 DuckDuckGo HTML 搜索，解析结果获取官网域名。
+/// Uses DuckDuckGo HTML search, parses results to get official website domain.
+#[derive(serde::Deserialize)]
+struct DdgResponse {
+    #[serde(rename = "OfficialWebsite")]
+    official_website: Option<String>,
+    #[serde(rename = "Results")]
+    results: Option<Vec<DdgResult>>,
+    #[serde(rename = "AbstractURL")]
+    abstract_url: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct DdgResult {
+    #[serde(rename = "FirstURL")]
+    first_url: Option<String>,
+}
+
+/// 搜索域名 API (GET /api/search?q=name)
+/// Search Domain API
+///
+/// 使用 DuckDuckGo API 和 HTML 搜索，解析结果获取官网域名。
+/// Uses DuckDuckGo API and HTML search, parses results to get official website domain.
+pub async fn search_domain(
+    Query(params): Query<SearchQuery>,
+) -> Result<Json<SearchResult>, String> {
+    let query = params.q.trim();
+    if query.is_empty() {
+        return Err("Query is empty".to_string());
+    }
+
+    println!("Searching for: {}", query);
+
+    // 1. 尝试 DuckDuckGo API (JSON)
+    // Try DuckDuckGo API (JSON) first
+    let api_url = format!("https://api.duckduckgo.com/?q={}&format=json", urlencoding::encode(query));
+    
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    match client.get(&api_url).send().await {
+        Ok(resp) => {
+            if let Ok(text) = resp.text().await {
+                // println!("API Response: {}", text); // Debug log
+                if let Ok(ddg_resp) = serde_json::from_str::<DdgResponse>(&text) {
+                    // 优先级 1: OfficialWebsite
+                    if let Some(url) = ddg_resp.official_website {
+                        if !url.is_empty() {
+                            if let Ok(parsed) = url::Url::parse(&url) {
+                                if let Some(domain) = parsed.host_str() {
+                                    println!("Found via API (OfficialWebsite): {}", domain);
+                                    return Ok(Json(SearchResult {
+                                        domain: domain.to_string(),
+                                    }));
+                                }
+                            }
+                        }
+                    }
+
+                    // 优先级 2: AbstractURL
+                    if let Some(url) = ddg_resp.abstract_url {
+                         if !url.is_empty() {
+                            if let Ok(parsed) = url::Url::parse(&url) {
+                                if let Some(domain) = parsed.host_str() {
+                                    if !domain.contains("wikipedia.org") {
+                                        println!("Found via API (AbstractURL): {}", domain);
+                                        return Ok(Json(SearchResult {
+                                            domain: domain.to_string(),
+                                        }));
+                                    }
+                                }
+                            }
+                         }
+                    }
+
+                    // 优先级 3: Results 中的 FirstURL
+                    if let Some(results) = ddg_resp.results {
+                        for result in results {
+                            if let Some(url) = result.first_url {
+                                if !url.is_empty() {
+                                    if let Ok(parsed) = url::Url::parse(&url) {
+                                        if let Some(domain) = parsed.host_str() {
+                                            println!("Found via API (Results): {}", domain);
+                                            return Ok(Json(SearchResult {
+                                                domain: domain.to_string(),
+                                            }));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        Err(e) => println!("API request failed: {}", e),
+    }
+
+    println!("API failed to find domain, falling back to HTML search...");
+
+    // 2. 回退到 DuckDuckGo HTML 搜索
+    // Fallback to DuckDuckGo HTML search
+    let url = format!("https://html.duckduckgo.com/html/?q={}", urlencoding::encode(query));
+    println!("Searching: {}", url);
+
+    // 发送请求
+    let resp = client.get(&url)
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+        .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+        .header("Referer", "https://html.duckduckgo.com/")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .text()
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    println!("Response length: {}", resp.len());
+    // if resp.len() < 1000 {
+    //      println!("Response body: {}", resp);
+    // }
+
+    // 3. 解析 HTML 提取第一个非广告链接
+    let document = scraper::Html::parse_document(&resp);
+    // 尝试更广泛的选择器
+    let selector = scraper::Selector::parse(".result__a, .result__url, .links_main a").unwrap();
+
+    for element in document.select(&selector) {
+        if let Some(href) = element.value().attr("href") {
+            println!("Found candidate link: {}", href);
+            
+            let actual_url = if href.starts_with("/l/") {
+                if let Some(start) = href.find("uddg=") {
+                    let encoded = &href[start + 5..];
+                    let end = encoded.find('&').unwrap_or(encoded.len());
+                    if let Ok(decoded) = urlencoding::decode(&encoded[..end]) {
+                         decoded.into_owned()
+                    } else {
+                        continue;
+                    }
+                } else {
+                    continue; 
+                }
+            } else {
+                href.to_string()
+            };
+
+            // 提取域名
+            if let Ok(parsed_url) = url::Url::parse(&actual_url) {
+                if let Some(domain) = parsed_url.host_str() {
+                    if domain.contains("duckduckgo.com") || parsed_url.scheme() != "http" && parsed_url.scheme() != "https" {
+                        continue;
+                    }
+                    
+                    println!("Found domain: {}", domain);
+                    return Ok(Json(SearchResult {
+                        domain: domain.to_string(),
+                    }));
+                }
+            }
+        }
+    }
+
+    Err("No domain found".to_string())
+}
 
 /// 获取所有订阅列表 (GET /api/subscriptions)
 /// Get list of all subscriptions

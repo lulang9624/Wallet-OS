@@ -39,3 +39,17 @@ tracing-subscriber = "0.3"
 # 时间处理库
 # Date and time handling library
 chrono = { version = "0.4", features = ["serde"] }
+
+# HTTP 客户端，用于后端联网搜索 (解决跨域问题)
+# HTTP client for backend online search (resolving CORS issues)
+reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
+# HTML 解析器，用于提取搜索结果中的真实链接
+# HTML parser for extracting real links from search results
+scraper = "0.18"
+
+# URL 编码库，用于处理搜索参数
+# URL encoding library for handling search parameters
+urlencoding = "2.1"
+# URL 解析库
+# URL parsing library
+url = "2.5"

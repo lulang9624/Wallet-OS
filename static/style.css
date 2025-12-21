@@ -109,6 +109,20 @@ h1 {
 }
 
 /* 
+ * 订阅服务图标 (Subscription Logos)
+ * 用于显示从 API 获取的品牌图标
+ */
+.sub-logo {
+    width: 32px;
+    height: 32px;
+    margin-right: 15px;
+    border-radius: 50%; /* 圆形图标 */
+    object-fit: cover; /* 保持比例填充 */
+    background-color: white; /* 部分透明 Logo 需要白色背景 */
+    vertical-align: middle;
+}
+
+/* 
  * 订阅列表卡片 (Subscription Cards)
  * 每一项订阅服务的展示样式。
  */
