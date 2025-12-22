@@ -59,7 +59,7 @@ Wallet OS 是一个现代化的个人订阅管理工具，帮助您轻松跟踪�
 
 3. **访问应用**:
    打开浏览器访问 `http://localhost:8081`。
-   *数据将自动持久化到 `./data` 目录。*
+   *数据将自动持久化到 `./wallet_os_data` 目录。*
 
 ### 方式二：本地开发 (Local Development)
 
@@ -71,7 +71,29 @@ Wallet OS 是一个现代化的个人订阅管理工具，帮助您轻松跟踪�
    # 首次运行会自动下载依赖并编译
    cargo run
    ```
-   默认监听端口为 `80` (Linux 下可能需要 `sudo`，或设置环境变量 `PORT=8080`)。
+默认监听端口为 `80`，在 Linux 下可能需要使用 `sudo cargo run`。
+
+### 环境变量 (Environment)
+
+- `DATABASE_URL`: SQLite 连接字符串，默认值为 `sqlite:wallet-os.db`。
+  - 示例（自定义路径）：`export DATABASE_URL=sqlite:./wallet_os_data/wallet-os.db`
+  - 首次启动会自动创建数据库文件与父目录。
+
+### 日志 (Logs)
+
+- 运行时会将日志写入 `./logs/wallet-os-YYYY-MM-DD.log`（按日滚动）。
+- Docker 部署已将宿主机 `./logs` 挂载到容器 `/app/logs`，方便持久化与查看。
+
+### 构建与发布 (Build & Release)
+
+```bash
+# 生成发布版二进制
+cargo build --release
+
+# 运行发布版（可指定数据库路径）
+export DATABASE_URL=sqlite:./wallet_os_data/wallet-os.db
+sudo ./target/release/wallet-os
+```
 
 3. **访问应用**:
    打开浏览器访问 `http://localhost`。
@@ -88,7 +110,6 @@ Wallet OS 是一个现代化的个人订阅管理工具，帮助您轻松跟踪�
 ├── static/          # 前端资源
 │   ├── index.html   # 单页应用入口 (含 JS 逻辑：预加载、动画、表单验证)
 │   └── style.css    # 样式表 (响应式设计、卡片布局、电池动画)
-├── data/            # (自动生成) SQLite 数据库文件存储目录
 ├── Cargo.toml       # Rust 项目依赖配置
 ├── Dockerfile       # 多阶段 Docker 构建文件 (Builder -> Runtime)
 ├── docker-compose.yml # 容器编排配置
@@ -102,6 +123,7 @@ Wallet OS 是一个现代化的个人订阅管理工具，帮助您轻松跟踪�
 | `GET` | `/api/subscriptions` | 获取所有订阅列表 (按下次付款时间排序) |
 | `POST` | `/api/subscriptions` | 创建新订阅 (自动触发图标匹配) |
 | `DELETE` | `/api/subscriptions/:id` | 删除指定订阅 |
+| `PUT` | `/api/subscriptions/:id` | 更新指定订阅 |
 | `GET` | `/api/search?q={name}` | **核心功能**: 根据名称搜索官网域名 (DuckDuckGo 源) |
 
 ## 🤝 贡献 (Contributing)
@@ -116,4 +138,4 @@ Wallet OS 是一个现代化的个人订阅管理工具，帮助您轻松跟踪�
 
 ## 📝 许可证 (License)
 
-本项目基于 [MIT License](LICENSE) 开源。
+本项目基于 [MIT License](https://opensource.org/licenses/MIT) 开源。
