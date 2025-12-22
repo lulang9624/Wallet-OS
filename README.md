@@ -364,6 +364,25 @@ sudo ./target/release/wallet-os
   }
   ```
 
+## 📦 文件与持久化 (Files & Persistence)
+
+| 本地路径 | 容器路径 | 内容说明 | 创建时机 |
+|---------|----------|----------|----------|
+| `./wallet_os_data/wallet-os.db` | `/app/data/wallet-os.db` | SQLite 数据库文件 | 首次启动自动创建 (代码与 Docker 映射双重兜底) |
+| `./wallet_os_data/wallet-os.db-wal` | `/app/data/wallet-os.db-wal` | SQLite WAL 日志文件 (并发优化) | 启用 WAL 模式后读写产生 (`src/db.rs` 配置) |
+| `./wallet_os_data/wallet-os.db-shm` | `/app/data/wallet-os.db-shm` | SQLite 共享内存索引文件 | 与 WAL 配套出现 |
+| `./logs/wallet-os.log.YYYY-MM-DD` | `/app/logs/wallet-os.log.YYYY-MM-DD` | 运行日志 (按日滚动) | 服务启动即写入 (`src/main.rs` 配置) |
+| `./static` | `/app/static` | 前端静态资源 (HTML/CSS/JS) | 仓库已有，容器直接挂载 |
+| `./static/icons/<domain>_<size>.png` | `/app/static/icons/<domain>_<size>.png` | 网站图标缓存 (PNG) | 访问 UI 或调用 `/api/icon` 时生成并持久化 |
+
+- 卷与挂载
+  - `docker-compose.yml` 使用宿主机绑定挂载：`./wallet_os_data:/app/data`、`./logs:/app/logs`、`./static:/app/static`
+  - 文件将落在项目根目录下的对应子目录，便于备份与查看
+- 说明
+  - WAL/SHM 文件仅在数据库读写时产生，属于 SQLite 正常行为
+  - Docker 镜像、容器与网络由 Docker 管理，存储在 Docker 的系统目录中，不位于项目目录
+  - Compose 定义了命名卷 `wallet_os_data`，当前服务使用宿主机目录绑定，命名卷处于未使用状态
+
 ## 🤝 贡献 (Contributing)
 
 欢迎提交 Issue 或 Pull Request！
