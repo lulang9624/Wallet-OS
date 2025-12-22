@@ -12,6 +12,11 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
+use axum::response::Response;
+use http::header::{CONTENT_TYPE, CACHE_CONTROL};
+use http::HeaderValue;
+use tokio::fs;
+use tokio::io::AsyncReadExt;
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn, debug};
 use std::time::Duration;
@@ -19,7 +24,14 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use parking_lot::RwLock;
 
-static SEARCH_CACHE: Lazy<RwLock<HashMap<String, String>>> = Lazy::new(|| RwLock::new(HashMap::new()));
+/// 域名搜索结果内存缓存
+/// In-memory cache for domain search results
+///
+/// 目的：避免对同一查询名称的重复网络请求，提升响应速度并降低外部 API 负载。
+/// Purpose: Prevent duplicate network requests for the same query name, improving
+/// response time and reducing external API load.
+static SEARCH_CACHE: Lazy<RwLock<HashMap<String, String>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
 
 #[derive(Deserialize)]
 pub struct SearchQuery {
@@ -29,6 +41,74 @@ pub struct SearchQuery {
 #[derive(Serialize)]
 pub struct SearchResult {
     domain: String,
+}
+
+#[derive(Deserialize)]
+pub struct IconQuery {
+    domain: String,
+    sz: Option<u32>,
+}
+
+/// 获取网站图标 (GET /api/icon?domain=example.com&sz=64)
+/// Fetch website icon
+///
+/// 行为：
+/// 1. 尝试从本地缓存目录 `static/icons` 读取，如果存在则直接返回并设置缓存头。
+/// 2. 若不存在，调用 Google Favicon 服务下载 PNG，并写入本地以供后续命中。
+/// 3. 所有成功响应附带 `Cache-Control`，允许前端浏览器进行缓存。
+/// Behavior:
+/// 1. Try reading from local cache dir `static/icons`; return if present with cache headers.
+/// 2. If missing, fetch PNG via Google Favicon, then persist for future hits.
+/// 3. Successful responses include `Cache-Control` for browser caching.
+#[axum::debug_handler]
+pub async fn get_icon(
+    Query(params): Query<IconQuery>,
+) -> Response {
+    let mut domain = params.domain.to_lowercase();
+    domain.retain(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-');
+    if domain.is_empty() {
+        return (StatusCode::BAD_REQUEST, "invalid domain").into_response();
+    }
+    let sz = params.sz.unwrap_or(64);
+    let file_name = format!("{}_{}.png", domain, sz);
+    let dir = "static/icons";
+    let path = format!("{}/{}", dir, file_name);
+
+    if let Ok(mut f) = fs::File::open(&path).await {
+        let mut buf = Vec::new();
+        if f.read_to_end(&mut buf).await.is_ok() {
+            let mut resp = Response::new(buf.into());
+            resp.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static("image/png"));
+            resp.headers_mut().insert(CACHE_CONTROL, HeaderValue::from_static("public, max-age=604800"));
+            return resp;
+        }
+    }
+
+    let _ = fs::create_dir_all(dir).await;
+    let url = format!("https://www.google.com/s2/favicons?domain={}&sz={}", domain, sz);
+    let client = match reqwest::Client::builder()
+        .user_agent("Mozilla/5.0")
+        .timeout(Duration::from_secs(8))
+        .build() {
+        Ok(c) => c,
+        Err(e) => return (StatusCode::BAD_GATEWAY, e.to_string()).into_response(),
+    };
+
+    match client.get(&url).send().await {
+        Ok(resp) => {
+            match resp.bytes().await {
+                Ok(bytes) => {
+                    let _ = fs::write(&path, &bytes).await;
+                    let mut resp = Response::new(bytes.into());
+                    resp.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static("image/png"));
+                    resp.headers_mut().insert(CACHE_CONTROL, HeaderValue::from_static("public, max-age=604800"));
+                    return resp;
+                },
+                Err(e) => return (StatusCode::BAD_GATEWAY, e.to_string()).into_response(),
+            }
+        },
+        Err(e) => (StatusCode::BAD_GATEWAY, e.to_string()).into_response(),
+    }
 }
 
 /// 搜索域名 API (GET /api/search?q=name)

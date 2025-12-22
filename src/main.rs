@@ -79,6 +79,7 @@ async fn main() {
         // API 路由：搜索域名 (GET)
         // API Routes: Search domain (GET)
         .route("/api/search", get(|state, query| async move { handlers::search_domain(state, query).await }))
+        .route("/api/icon", get(handlers::get_icon))
         
         // 静态文件服务
         // 将根路径 "/" 映射到本地的 "static" 目录，用于托管前端页面 (HTML, CSS, JS)。

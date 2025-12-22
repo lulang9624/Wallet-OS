@@ -50,7 +50,7 @@ body {
     color: var(--text-color);
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     margin: 0;
-    padding: 20px;
+    padding: 0;
     line-height: 1.6;
     transition: background-color 0.2s ease, color 0.2s ease;
 }
@@ -65,10 +65,11 @@ h1 {
  * 限制内容的最大宽度并居中显示，适配不同屏幕尺寸。
  */
 .container {
-    max-width: 800px;
+    width: 100vw;
+    height: 100vh;
     margin: 0 auto;
-    padding: 0 10px;
-    height: calc(100vh - 40px);
+    padding: 20px 20px;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
 }
@@ -76,6 +77,15 @@ h1 {
 .top-panel {
     flex-shrink: 0;
     background: var(--bg-color);
+}
+
+#subs-list {
+    /* 订阅列表滚动容器
+     * Scroll container for subscription cards
+     * 
+     * 使主区域在视口内滚动，以便顶部统计面板保持稳定。
+     * Keep main area scrollable within viewport so top stats panel remains fixed.
+     */
 }
 
 #subs-list {

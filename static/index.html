@@ -1,4 +1,13 @@
 <!DOCTYPE html>
+<!--
+  Wallet OS Frontend
+  概览：
+  - 顶部统计面板：展示月度总额与活跃/过期数量
+  - 订阅列表：从后端 `/api/subscriptions` 获取，按下次付款时间排序
+  - 模态框：新增/编辑/续订/删除确认
+  - 图标获取：后端 `/api/icon?domain=...&sz=64`，本地缓存 + HTTP 缓存
+  - 在线搜索：调用 `/api/search?q=...` 获取官网域名并生成 Logo
+-->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -315,7 +324,15 @@
         function getLogoUrl(sub) {
             // 1. 优先使用已保存的 Logo
             if (sub.logo && sub.logo.trim() !== '') {
-                return sub.logo;
+                const saved = sub.logo.trim();
+                const m = saved.match(/domain=([^&]+)/);
+                if (m) {
+                    const d = m[1];
+                    const szm = saved.match(/sz=(\d+)/);
+                    const size = szm ? szm[1] : '64';
+                    return `/api/icon?domain=${d}&sz=${size}`;
+                }
+                return saved;
             }
 
             let domain = '';
@@ -351,7 +368,7 @@
 
             // 使用 Google Favicon 服务作为首选 (更稳定)
             // Use Google Favicon service as primary (more stable)
-            return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+            return `/api/icon?domain=${domain}&sz=64`;
         }
 
         /**
@@ -377,7 +394,7 @@
                             return {
                                 name: name,
                                 domain: data.domain,
-                                logo: `https://www.google.com/s2/favicons?domain=${data.domain}&sz=64`
+                                logo: `/api/icon?domain=${data.domain}&sz=64`
                             };
                         }
                     }
