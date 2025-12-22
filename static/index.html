@@ -9,28 +9,26 @@
 </head>
 <body>
     <div class="container">
-        <h1>Wallet OS</h1>
-        
-        <!-- 统计展示区域 (Statistics Display Area) -->
-        <!-- 用于显示总月费和活跃订阅数量 -->
-        <div class="stats-grid">
-            <div class="stat-box">
-                <h3>Total Monthly</h3>
-                <div class="value" id="total-cost">...</div>
+        <div class="top-panel">
+            <h1>Wallet OS</h1>
+            
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <h3>Total Monthly</h3>
+                    <div class="value" id="total-cost">...</div>
+                </div>
+                <div class="stat-box">
+                    <h3>Active / Expired</h3>
+                    <div class="value" id="active-count">...</div>
+                </div>
             </div>
-            <div class="stat-box">
-                <h3>Active / Expired</h3>
-                <div class="value" id="active-count">...</div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <button class="btn" id="theme-toggle" onclick="toggleTheme()">Light Mode</button>
+                <button class="btn" onclick="openModal()">+ Add Subscription</button>
             </div>
         </div>
 
-        <!-- 操作按钮区域 (Action Button Area) -->
-        <div style="text-align: right; margin-bottom: 20px;">
-            <button class="btn" onclick="openModal()">+ Add Subscription</button>
-        </div>
-
-        <!-- 订阅列表容器 (Subscription List Container) -->
-        <!-- JS 将会动态把订阅卡片插入到这里 -->
         <div id="subs-list">Loading...</div>
     </div>
 
@@ -99,6 +97,34 @@
         // 搜索结果缓存 (存储 Promise 以避免并发请求)
         // Search result cache (stores Promise to avoid concurrent requests)
         let searchCache = {};
+        
+        function applyTheme(theme) {
+            const root = document.documentElement;
+            if (theme === 'light') {
+                root.setAttribute('data-theme', 'light');
+            } else {
+                root.removeAttribute('data-theme');
+            }
+            const btn = document.getElementById('theme-toggle');
+            if (btn) {
+                btn.innerText = theme === 'light' ? 'Dark Mode' : 'Light Mode';
+            }
+        }
+        
+        function initTheme() {
+            let theme = localStorage.getItem('theme');
+            if (!theme) {
+                theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+            }
+            applyTheme(theme);
+        }
+        
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+            const next = current === 'light' ? 'dark' : 'light';
+            localStorage.setItem('theme', next);
+            applyTheme(next);
+        }
 
         /**
          * 获取并渲染订阅列表
@@ -831,6 +857,7 @@
 
         // 页面加载完成后立即获取数据
         // Fetch data immediately on page load
+        initTheme();
         fetchSubs();
     </script>
 </body>

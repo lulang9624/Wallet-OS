@@ -23,6 +23,16 @@
     --text-muted: #aaa;
 }
 
+:root[data-theme="light"] {
+    --bg-color: #f7f7f7;
+    --card-bg: #ffffff;
+    --text-color: #222222;
+    --accent: #4caf50;
+    --danger: #f44336;
+    --border-color: #e0e0e0;
+    --text-muted: #777777;
+}
+
 /* 
  * 基础样式 (Base Styles)
  * 设置全局的字体、背景和基本的盒模型属性。
@@ -34,6 +44,7 @@ body {
     margin: 0;
     padding: 20px;
     line-height: 1.6;
+    transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 h1 { 
@@ -48,7 +59,21 @@ h1 {
 .container {
     max-width: 800px;
     margin: 0 auto;
-    padding: 0 10px; /* 在小屏幕上增加内边距 */
+    padding: 0 10px;
+    height: calc(100vh - 40px);
+    display: flex;
+    flex-direction: column;
+}
+
+.top-panel {
+    flex-shrink: 0;
+    background: var(--bg-color);
+}
+
+#subs-list {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 10px;
 }
 
 /* 
