@@ -97,6 +97,8 @@ pub async fn init_db() -> Result<DbPool, sqlx::Error> {
             logo TEXT,
             active BOOLEAN DEFAULT 1
         );
+        CREATE INDEX IF NOT EXISTS idx_subscriptions_next_payment ON subscriptions(next_payment);
+        CREATE INDEX IF NOT EXISTS idx_subscriptions_name ON subscriptions(name);
         "#
     )
     .execute(&pool)

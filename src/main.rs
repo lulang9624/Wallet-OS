@@ -10,7 +10,9 @@ use std::net::SocketAddr;
 use tower_http::services::ServeDir;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
+use tower_http::compression::CompressionLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use std::env;
 
 /// 应用程序的主入口点
 /// Main entry point of the application
@@ -76,7 +78,7 @@ async fn main() {
 
         // API 路由：搜索域名 (GET)
         // API Routes: Search domain (GET)
-        .route("/api/search", get(handlers::search_domain))
+        .route("/api/search", get(|state, query| async move { handlers::search_domain(state, query).await }))
         
         // 静态文件服务
         // 将根路径 "/" 映射到本地的 "static" 目录，用于托管前端页面 (HTML, CSS, JS)。
@@ -89,6 +91,7 @@ async fn main() {
         // Middleware: CORS (Cross-Origin Resource Sharing).
         // Allows requests from different origins, facilitating frontend-backend debugging.
         .layer(CorsLayer::permissive())
+        .layer(CompressionLayer::new())
 
         // 中间件：Trace (日志追踪)
         // 自动记录 HTTP 请求日志
@@ -106,7 +109,8 @@ async fn main() {
     //    监听所有网络接口 (0.0.0.0) 的 80 端口。
     //    Configure server listening address.
     //    Listens on port 80 of all network interfaces (0.0.0.0).
-    let addr = SocketAddr::from(([0, 0, 0, 0], 80));
+    let port = env::var("PORT").ok().and_then(|p| p.parse::<u16>().ok()).unwrap_or(80);
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
     tracing::info!("Listening on {}", addr);
     
     // 绑定 TCP 监听器

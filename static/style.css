@@ -33,6 +33,14 @@
     --text-muted: #777777;
 }
 
+:root.theme-transition * {
+    transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root.theme-transition * { transition: none !important; }
+}
+
 /* 
  * 基础样式 (Base Styles)
  * 设置全局的字体、背景和基本的盒模型属性。

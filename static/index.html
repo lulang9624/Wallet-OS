@@ -120,10 +120,14 @@
         }
         
         function toggleTheme() {
+            document.documentElement.classList.add('theme-transition');
             const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
             const next = current === 'light' ? 'dark' : 'light';
             localStorage.setItem('theme', next);
             applyTheme(next);
+            setTimeout(() => {
+                document.documentElement.classList.remove('theme-transition');
+            }, 300);
         }
 
         /**

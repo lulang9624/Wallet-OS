@@ -10,7 +10,7 @@ tokio = { version = "1.0", features = ["full"] }
 
 # Web 框架，用于构建 HTTP 服务器
 # Web framework for building HTTP servers
-axum = "0.7"
+axum = { version = "0.7", features = ["macros"] }
 
 # 数据库连接库，支持 SQLite 和异步操作
 # Database connection library, supporting SQLite and async operations
@@ -26,7 +26,7 @@ serde_json = "1.0"
 
 # HTTP 服务组件，提供静态文件服务和 CORS 支持
 # HTTP service components, providing static file serving and CORS support
-tower-http = { version = "0.5", features = ["fs", "cors", "trace"] }
+tower-http = { version = "0.5", features = ["fs", "cors", "trace", "compression-gzip", "compression-br", "compression-deflate", "compression-zstd"] }
 
 # 日志追踪库
 # Logging and tracing library
@@ -61,3 +61,5 @@ urlencoding = "2.1"
 # URL 解析库
 # URL parsing library
 url = "2.5"
+once_cell = "1.19"
+parking_lot = "0.12"

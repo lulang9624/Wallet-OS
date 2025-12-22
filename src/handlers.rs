@@ -9,9 +9,17 @@ use crate::models::{CreateSubscription, Subscription};
 use axum::{
     extract::{Path, State, Query},
     Json,
+    http::StatusCode,
+    response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn, debug};
+use std::time::Duration;
+use once_cell::sync::Lazy;
+use std::collections::HashMap;
+use parking_lot::RwLock;
+
+static SEARCH_CACHE: Lazy<RwLock<HashMap<String, String>>> = Lazy::new(|| RwLock::new(HashMap::new()));
 
 #[derive(Deserialize)]
 pub struct SearchQuery {
@@ -49,24 +57,34 @@ struct DdgResult {
 ///
 /// 使用 DuckDuckGo API 和 HTML 搜索，解析结果获取官网域名。
 /// Uses DuckDuckGo API and HTML search, parses results to get official website domain.
+#[axum::debug_handler]
 pub async fn search_domain(
+    State(_pool): State<DbPool>,
     Query(params): Query<SearchQuery>,
-) -> Result<Json<SearchResult>, String> {
+) -> axum::response::Response {
     let query = params.q.trim();
     if query.is_empty() {
-        return Err("Query is empty".to_string());
+        return (StatusCode::BAD_REQUEST, "Query is empty".to_string()).into_response();
     }
 
     info!("Searching for: {}", query);
+
+    if let Some(cached) = { SEARCH_CACHE.read().get(query).cloned() } {
+        info!("Cache hit: {}", cached);
+        return Json(SearchResult { domain: cached }).into_response();
+    }
 
     // 1. 尝试 DuckDuckGo API (JSON)
     // Try DuckDuckGo API (JSON) first
     let api_url = format!("https://api.duckduckgo.com/?q={}&format=json", urlencoding::encode(query));
     
-    let client = reqwest::Client::builder()
+    let client = match reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-        .build()
-        .map_err(|e| e.to_string())?;
+        .timeout(Duration::from_secs(8))
+        .build() {
+        Ok(c) => c,
+        Err(e) => return (StatusCode::BAD_GATEWAY, e.to_string()).into_response(),
+    };
 
     match client.get(&api_url).send().await {
         Ok(resp) => {
@@ -79,9 +97,8 @@ pub async fn search_domain(
                             if let Ok(parsed) = url::Url::parse(&url) {
                                 if let Some(domain) = parsed.host_str() {
                                     info!("Found via API (OfficialWebsite): {}", domain);
-                                    return Ok(Json(SearchResult {
-                                        domain: domain.to_string(),
-                                    }));
+                                    { SEARCH_CACHE.write().insert(query.to_string(), domain.to_string()); }
+                                    return Json(SearchResult { domain: domain.to_string() }).into_response();
                                 }
                             }
                         }
@@ -94,9 +111,8 @@ pub async fn search_domain(
                                 if let Some(domain) = parsed.host_str() {
                                     if !domain.contains("wikipedia.org") {
                                         info!("Found via API (AbstractURL): {}", domain);
-                                        return Ok(Json(SearchResult {
-                                            domain: domain.to_string(),
-                                        }));
+                                        { SEARCH_CACHE.write().insert(query.to_string(), domain.to_string()); }
+                                        return Json(SearchResult { domain: domain.to_string() }).into_response();
                                     }
                                 }
                             }
@@ -111,9 +127,8 @@ pub async fn search_domain(
                                     if let Ok(parsed) = url::Url::parse(&url) {
                                         if let Some(domain) = parsed.host_str() {
                                             info!("Found via API (Results): {}", domain);
-                                            return Ok(Json(SearchResult {
-                                                domain: domain.to_string(),
-                                            }));
+                                            { SEARCH_CACHE.write().insert(query.to_string(), domain.to_string()); }
+                                            return Json(SearchResult { domain: domain.to_string() }).into_response();
                                         }
                                     }
                                 }
@@ -134,17 +149,20 @@ pub async fn search_domain(
     debug!("Searching: {}", url);
 
     // 发送请求
-    let resp = client.get(&url)
+    let resp = match client.get(&url)
         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
         .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
         .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
         .header("Referer", "https://html.duckduckgo.com/")
         .send()
-        .await
-        .map_err(|e| e.to_string())?
-        .text()
-        .await
-        .map_err(|e| e.to_string())?;
+        .await {
+        Ok(r) => r,
+        Err(e) => return (StatusCode::BAD_GATEWAY, e.to_string()).into_response(),
+    };
+    let resp = match resp.text().await {
+        Ok(t) => t,
+        Err(e) => return (StatusCode::BAD_GATEWAY, e.to_string()).into_response(),
+    };
     
     debug!("Response length: {}", resp.len());
     // if resp.len() < 1000 {
@@ -184,15 +202,14 @@ pub async fn search_domain(
                     }
                     
                     info!("Found domain: {}", domain);
-                    return Ok(Json(SearchResult {
-                        domain: domain.to_string(),
-                    }));
+                    { SEARCH_CACHE.write().insert(query.to_string(), domain.to_string()); }
+                    return Json(SearchResult { domain: domain.to_string() }).into_response();
                 }
             }
         }
     }
 
-    Err("No domain found".to_string())
+    (StatusCode::NOT_FOUND, "No domain found".to_string()).into_response()
 }
 
 /// 获取所有订阅列表 (GET /api/subscriptions)
@@ -240,6 +257,9 @@ pub async fn create_subscription(
 
     // 处理价格和日期逻辑
     // Handle price and date logic
+    if ![0,1,3,12].contains(&payload.frequency) {
+        return Err("Invalid frequency".to_string());
+    }
     let (price, next_payment) = if payload.frequency == 0 {
         // 永久订阅：价格可选 (默认为 0)，无需下次付款日期
         // Lifetime: Price optional (default 0), no next payment date
@@ -334,6 +354,9 @@ pub async fn update_subscription(
     }
 
     // 处理价格和日期逻辑
+    if ![0,1,3,12].contains(&payload.frequency) {
+        return Err("Invalid frequency".to_string());
+    }
     let (price, next_payment) = if payload.frequency == 0 {
         (payload.price.unwrap_or(0.0), None)
     } else {
