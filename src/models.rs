@@ -70,20 +70,20 @@ pub struct CreateSubscription {
     /// Subscription name (Required)
     pub name: String,
     
-    /// 价格 (必填)
-    /// Price (Required)
-    pub price: f64,
+    /// 价格 (可选，永久订阅可不填)
+    /// Price (Optional, can be omitted for lifetime)
+    pub price: Option<f64>,
     
     /// 货币类型 (默认为 CNY)
     /// Currency type (Default: CNY)
     pub currency: String,
     
-    /// 下次付款日期 (必填)
-    /// Next payment date (Required)
-    pub next_payment: String,
+    /// 下次付款日期 (可选，永久订阅可不填)
+    /// Next payment date (Optional, can be omitted for lifetime)
+    pub next_payment: Option<String>,
     
-    /// 付款频率 (1 或 12)
-    /// Payment frequency (1 or 12)
+    /// 付款频率 (1=Monthly, 12=Yearly, 0=Lifetime)
+    /// Payment frequency
     pub frequency: i64,
     
     /// 官网链接

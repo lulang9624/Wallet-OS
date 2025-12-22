@@ -3,7 +3,7 @@ mod handlers;
 mod models;
 
 use axum::{
-    routing::{get, post, delete},
+    routing::{get, post, delete, put},
     Router,
 };
 use std::net::SocketAddr;
@@ -37,9 +37,9 @@ async fn main() {
         // API Routes: Get all subscriptions (GET) and Create new subscription (POST)
         .route("/api/subscriptions", get(handlers::list_subscriptions).post(handlers::create_subscription))
         
-        // API 路由：根据 ID 删除特定订阅 (DELETE)
-        // API Routes: Delete a specific subscription by ID (DELETE)
-        .route("/api/subscriptions/:id", delete(handlers::delete_subscription))
+        // API 路由：根据 ID 删除特定订阅 (DELETE) 或 更新特定订阅 (PUT)
+        // API Routes: Delete a specific subscription by ID (DELETE) or Update specific subscription (PUT)
+        .route("/api/subscriptions/:id", delete(handlers::delete_subscription).put(handlers::update_subscription))
 
         // API 路由：搜索域名 (GET)
         // API Routes: Search domain (GET)

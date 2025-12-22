@@ -42,18 +42,28 @@
             
             <!-- 订阅表单 -->
             <!-- Subscription Form -->
-            <input type="text" id="name" placeholder="Name (e.g. Netflix)" oninput="clearError()" onblur="prefillUrl()">
+            <input type="text" id="name" placeholder="Name (e.g. Netflix)" oninput="clearError()" onfocus="this.select()">
             <!-- 错误提示信息 -->
             <div id="name-error" class="error-msg">Name is required</div>
             
-            <input type="number" id="price" placeholder="Price">
-            <input type="text" id="currency" value="CNY" placeholder="Currency">
-            <select id="frequency">
-                <option value="1">Monthly</option>
-                <option value="12">Yearly</option>
-            </select>
-            <input type="date" id="next_payment">
-            <input type="text" id="url" placeholder="Website URL (optional, for better logo match)">
+            <input type="number" id="price" placeholder="Price" oninput="clearError()" onfocus="this.select()">
+            <div id="price-error" class="error-msg">Price is required</div>
+
+            <input type="text" id="currency" value="CNY" placeholder="Currency" onfocus="this.select()">
+            
+            <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                <select id="frequency" style="flex: 1; margin-bottom: 0;">
+                    <option value="1">Monthly</option>
+                    <option value="12">Yearly</option>
+                </select>
+                <div style="margin-left: 15px; display: flex; align-items: center;">
+                    <input type="checkbox" id="lifetime" onchange="toggleLifetime()" style="width: auto; margin-right: 5px;">
+                    <label for="lifetime" style="cursor: pointer;">Lifetime</label>
+                </div>
+            </div>
+
+            <input type="date" id="next_payment" oninput="clearError()">
+            <div id="date-error" class="error-msg">Next payment date is required</div>
             
             <button id="btn-save" class="btn" onclick="addSubscription()">Save</button>
             <button class="btn" style="background: #666;" onclick="closeModal()">Cancel</button>
@@ -110,7 +120,12 @@
                 
                 // 遍历并生成 HTML
                 data.forEach(sub => {
-                    let freqLabel = sub.frequency === 12 ? '/yr' : '/mo';
+                    let freqLabel;
+                    if (sub.frequency === 0) {
+                        freqLabel = ''; // No label for lifetime
+                    } else {
+                        freqLabel = sub.frequency === 12 ? '/yr' : '/mo';
+                    }
                     
                     // 计算电池状态 HTML
                     // Calculate battery status HTML
@@ -143,10 +158,12 @@
                                     <h3>${sub.name}</h3>
                                     ${batteryHtml}
                                 </div>
-                                <small>Next: ${sub.next_payment || 'N/A'}</small>
+                                <small>${sub.frequency === 0 ? 'Lifetime' : 'Next: ' + (sub.next_payment || 'N/A')}</small>
                             </div>
                             <div style="text-align: right;">
-                                <div class="sub-price">${sub.currency} ${sub.price}<span style="font-size:0.8rem;color:#aaa">${freqLabel}</span></div>
+                                <div class="sub-price">${sub.currency} ${sub.price}${freqLabel ? '<span style="font-size:0.8rem;color:#aaa">' + freqLabel + '</span>' : ''}</div>
+                                <!-- 编辑按钮 -->
+                                <button style="background:none; border:none; color:var(--text-muted); cursor:pointer; margin-right:10px;" onclick="openModal(${sub.id})">Edit</button>
                                 <!-- 删除按钮，点击触发 openDeleteModal -->
                                 <button style="background:none; border:none; color:#f44336; cursor:pointer;" onclick="openDeleteModal(${sub.id})">Delete</button>
                             </div>
@@ -178,6 +195,19 @@
          * @param {number} frequency - 付款频率 (1=月, 12=年)
          */
         function getBatteryHtml(nextDateStr, frequency) {
+            // 永久订阅处理
+            // Handle lifetime subscription
+            if (frequency === 0) {
+                return `
+                    <div class="battery-container" title="Lifetime">
+                        <div class="battery" style="border-color: gold;">
+                            <div class="battery-level" style="width: 100%; background: gold;" data-width="100%"></div>
+                        </div>
+                        <span class="days-left" style="color: gold;">∞</span>
+                    </div>
+                `;
+            }
+
             if (!nextDateStr) return '';
             
             const nextDate = new Date(nextDateStr);
@@ -337,6 +367,10 @@
             let currency = subs.length > 0 ? subs[0].currency : 'CNY';
             
             subs.forEach(sub => {
+                // 忽略永久订阅 (不计入月费)
+                // Ignore lifetime subscriptions (not counted in monthly cost)
+                if (sub.frequency === 0) return;
+
                 // 将年付金额分摊到每月
                 // Amortize yearly payments to monthly
                 if(sub.frequency === 12) {
@@ -350,32 +384,34 @@
         }
 
         /**
-         * 在输入框失去焦点时预先搜索 URL
-         * Prefill URL when input loses focus
+         * 切换永久订阅状态
+         * Toggle Lifetime Subscription status
          */
-        async function prefillUrl() {
-            const name = document.getElementById('name').value.trim();
-            const urlInput = document.getElementById('url');
-            
-            if (!name || urlInput.value.trim() !== '') return;
+        function toggleLifetime() {
+            const isLifetime = document.getElementById('lifetime').checked;
+            const freqSelect = document.getElementById('frequency');
+            const dateInput = document.getElementById('next_payment');
+            const priceInput = document.getElementById('price');
 
-            // 显示一个临时的占位符
-            const originalPlaceholder = urlInput.placeholder;
-            urlInput.placeholder = "Searching domain...";
-
-            // 发起搜索 (如果已有请求在进行中，会直接等待该请求)
-            const result = await searchCompany(name);
-            
-            if (result && result.domain) {
-                // 双重检查：确保此时 URL 还是空的 (用户可能在等待期间手动输入了)
-                if (urlInput.value.trim() === '') {
-                    urlInput.value = 'https://' + result.domain;
-                    urlInput.style.borderColor = '#4caf50';
-                    setTimeout(() => urlInput.style.borderColor = '#333', 1000);
-                }
+            if (isLifetime) {
+                freqSelect.disabled = true;
+                freqSelect.style.opacity = '0.5';
+                
+                dateInput.disabled = true;
+                dateInput.style.opacity = '0.5';
+                dateInput.value = ''; // Clear date
+                
+                priceInput.placeholder = "Price (Optional for Lifetime)";
+            } else {
+                freqSelect.disabled = false;
+                freqSelect.style.opacity = '1';
+                
+                dateInput.disabled = false;
+                dateInput.style.opacity = '1';
+                
+                priceInput.placeholder = "Price";
             }
-
-            urlInput.placeholder = originalPlaceholder;
+            clearError();
         }
 
         /**
@@ -385,14 +421,38 @@
         async function addSubscription() {
             const btnSave = document.getElementById('btn-save');
             const nameInput = document.getElementById('name');
-            const errorMsg = document.getElementById('name-error');
-            const name = nameInput.value;
+            const priceInput = document.getElementById('price');
+            const dateInput = document.getElementById('next_payment');
+            const isLifetime = document.getElementById('lifetime').checked;
             
-            if (!name || name.trim() === '') {
+            // Clear previous errors
+            clearError();
+            
+            let hasError = false;
+            
+            // 1. Validate Name
+            if (!nameInput.value || nameInput.value.trim() === '') {
                 nameInput.classList.add('input-error');
-                errorMsg.style.display = 'block';
-                return;
+                document.getElementById('name-error').style.display = 'block';
+                hasError = true;
             }
+            
+            // 2. Validate Price (Required unless Lifetime)
+            // Note: Lifetime allows empty price (backend defaults to 0)
+            if (!isLifetime && (!priceInput.value || priceInput.value.trim() === '')) {
+                priceInput.classList.add('input-error');
+                document.getElementById('price-error').style.display = 'block';
+                hasError = true;
+            }
+
+            // 3. Validate Date (Required unless Lifetime)
+            if (!isLifetime && (!dateInput.value || dateInput.value.trim() === '')) {
+                dateInput.classList.add('input-error');
+                document.getElementById('date-error').style.display = 'block';
+                hasError = true;
+            }
+            
+            if (hasError) return;
 
             const originalBtnText = btnSave.innerText;
             btnSave.disabled = true;
@@ -402,40 +462,46 @@
 
             try {
                 const payload = {
-                    name: name,
-                    price: parseFloat(document.getElementById('price').value) || 0,
+                    name: nameInput.value,
+                    price: priceInput.value ? parseFloat(priceInput.value) : null, // Send null if empty
                     currency: document.getElementById('currency').value,
-                    next_payment: document.getElementById('next_payment').value,
-                    frequency: parseInt(document.getElementById('frequency').value),
-                    url: document.getElementById('url').value || "",
+                    next_payment: isLifetime ? null : dateInput.value,
+                    frequency: isLifetime ? 0 : parseInt(document.getElementById('frequency').value),
+                    url: "", // Removed input, handled by auto-search logic below
                     logo: ""
                 };
 
-                // 如果没有 URL，尝试获取搜索结果
-                if (!payload.url) {
+                // 尝试自动匹配 URL (仅在 Name 变更或 Logo 为空时触发)
+                // Try auto-match URL (only if name changed or logo empty)
+                if (!isEditMode || !originalLogo) {
                     btnSave.innerText = "Searching Domain...";
-                    // 这里直接 await searchCompany
-                    // 如果 prefillUrl 已经触发了搜索，这里会瞬间返回同一个 Promise 的结果
-                    // If prefillUrl already triggered search, this returns the same Promise result instantly
-                    const companyInfo = await searchCompany(name);
+                    const companyInfo = await searchCompany(payload.name);
 
                     if (companyInfo && companyInfo.domain) {
                         payload.url = 'https://' + companyInfo.domain;
                         payload.logo = companyInfo.logo;
                         console.log(`Auto-matched: ${companyInfo.domain}`);
                     }
+                } else {
+                    // 编辑模式下，如果没重新搜索，保持原有 Logo
+                    // In edit mode, keep original logo if not re-searched
+                    payload.logo = originalLogo;
                 }
 
-                btnSave.innerText = "Saving...";
-                const res = await fetch(API, {
-                    method: 'POST',
+                btnSave.innerText = isEditMode ? "Updating..." : "Saving...";
+                
+                const url = isEditMode ? `${API}/${editId}` : API;
+                const method = isEditMode ? 'PUT' : 'POST';
+
+                const res = await fetch(url, {
+                    method: method,
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
 
                 if (!res.ok) {
                     const errorText = await res.text();
-                    alert('Error adding subscription: ' + errorText);
+                    alert(`Error ${isEditMode ? 'updating' : 'adding'} subscription: ` + errorText);
                     return;
                 }
 
@@ -446,7 +512,7 @@
                 alert("An unexpected error occurred.");
             } finally {
                 btnSave.disabled = false;
-                btnSave.innerText = originalBtnText;
+                btnSave.innerText = originalBtnText; // Restore original text (Save/Update)
                 btnSave.style.opacity = "1";
                 btnSave.style.cursor = "pointer";
             }
@@ -520,15 +586,76 @@
             fetchSubs(); // 刷新列表
         }
 
+        // 编辑模式状态
+        // Edit mode state
+        let isEditMode = false;
+        let editId = null;
+        let originalLogo = "";
+
         // ==============================
         // 通用模态框控制 (Modal Controls)
         // ==============================
-        function openModal() { 
+        /**
+         * 打开添加/编辑模态框
+         * Open Add/Edit Modal
+         * @param {number|null} id - 如果提供 ID，则进入编辑模式 (If ID provided, enter edit mode)
+         */
+        function openModal(id = null) { 
             clearError();
-            // 重置表单
-            document.getElementById('name').value = '';
-            document.getElementById('price').value = '';
-            document.getElementById('url').value = ''; // Reset URL field
+            const modalTitle = document.querySelector('#addModal h2');
+            const btnSave = document.getElementById('btn-save');
+
+            if (id) {
+                // 编辑模式
+                // Edit Mode
+                const sub = currentSubs.find(s => s.id === id);
+                if (!sub) return;
+
+                isEditMode = true;
+                editId = id;
+                originalLogo = sub.logo; // 保存原有 Logo，避免编辑时丢失
+                
+                modalTitle.innerText = "Edit Subscription";
+                btnSave.innerText = "Update";
+
+                // 填充表单
+                document.getElementById('name').value = sub.name;
+                document.getElementById('price').value = sub.price;
+                document.getElementById('currency').value = sub.currency;
+                
+                // 处理 Lifetime
+                if (sub.frequency === 0) {
+                    document.getElementById('lifetime').checked = true;
+                    document.getElementById('frequency').value = 1; // 重置为默认，虽然会被禁用
+                    document.getElementById('next_payment').value = '';
+                } else {
+                    document.getElementById('lifetime').checked = false;
+                    document.getElementById('frequency').value = sub.frequency;
+                    document.getElementById('next_payment').value = sub.next_payment || '';
+                }
+                
+                toggleLifetime(); // 更新 UI 状态
+            } else {
+                // 新增模式
+                // Add Mode
+                isEditMode = false;
+                editId = null;
+                originalLogo = "";
+                
+                modalTitle.innerText = "New Subscription";
+                btnSave.innerText = "Save";
+
+                // 重置表单
+                document.getElementById('name').value = '';
+                document.getElementById('price').value = '';
+                document.getElementById('currency').value = 'CNY';
+                document.getElementById('lifetime').checked = false;
+                document.getElementById('frequency').value = 1;
+                document.getElementById('next_payment').value = '';
+                
+                toggleLifetime(); 
+            }
+            
             // 显示模态框
             document.getElementById('addModal').style.display = 'block'; 
         }
@@ -540,10 +667,17 @@
         // 清除表单错误样式
         // Clear form error styles
         function clearError() {
-            const nameInput = document.getElementById('name');
-            const errorMsg = document.getElementById('name-error');
-            nameInput.classList.remove('input-error');
-            errorMsg.style.display = 'none';
+            // Name
+            document.getElementById('name').classList.remove('input-error');
+            document.getElementById('name-error').style.display = 'none';
+            
+            // Price
+            document.getElementById('price').classList.remove('input-error');
+            document.getElementById('price-error').style.display = 'none';
+            
+            // Date
+            document.getElementById('next_payment').classList.remove('input-error');
+            document.getElementById('date-error').style.display = 'none';
         }
 
         // 页面加载完成后立即获取数据

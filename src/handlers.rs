@@ -237,6 +237,24 @@ pub async fn create_subscription(
         return Err("Name is required".to_string());
     }
 
+    // 处理价格和日期逻辑
+    // Handle price and date logic
+    let (price, next_payment) = if payload.frequency == 0 {
+        // 永久订阅：价格可选 (默认为 0)，无需下次付款日期
+        // Lifetime: Price optional (default 0), no next payment date
+        (payload.price.unwrap_or(0.0), None)
+    } else {
+        // 普通订阅：价格和日期必填
+        // Normal: Price and Date required
+        if payload.price.is_none() {
+            return Err("Price is required for non-lifetime subscriptions".to_string());
+        }
+        if payload.next_payment.is_none() {
+            return Err("Next payment date is required for non-lifetime subscriptions".to_string());
+        }
+        (payload.price.unwrap(), payload.next_payment)
+    };
+
     // 2. 插入数据库
     //    Insert into database
     //    执行 INSERT 语句并获取新生成的 ID
@@ -248,9 +266,9 @@ pub async fn create_subscription(
         "#
     )
     .bind(&payload.name)
-    .bind(payload.price)
+    .bind(price)
     .bind(&payload.currency)
-    .bind(&payload.next_payment)
+    .bind(&next_payment)
     .bind(payload.frequency)
     .bind(&payload.url)
     .bind(&payload.logo)
@@ -266,9 +284,9 @@ pub async fn create_subscription(
     let sub = Subscription {
         id,
         name: payload.name,
-        price: payload.price,
+        price,
         currency: payload.currency,
-        next_payment: Some(payload.next_payment),
+        next_payment,
         frequency: payload.frequency,
         url: payload.url,
         logo: payload.logo,
@@ -300,4 +318,69 @@ pub async fn delete_subscription(
     // 返回简单的成功状态 JSON
     // Return simple success status JSON
     Ok(Json(serde_json::json!({ "status": "deleted" })))
+}
+
+/// 更新指定订阅 (PUT /api/subscriptions/:id)
+/// Update specific subscription
+pub async fn update_subscription(
+    State(pool): State<DbPool>,
+    Path(id): Path<i64>,
+    Json(payload): Json<CreateSubscription>,
+) -> Result<Json<Subscription>, String> {
+    // 1. 数据验证 (与 Create 逻辑相同)
+    if payload.name.trim().is_empty() {
+        return Err("Name is required".to_string());
+    }
+
+    // 处理价格和日期逻辑
+    let (price, next_payment) = if payload.frequency == 0 {
+        (payload.price.unwrap_or(0.0), None)
+    } else {
+        if payload.price.is_none() {
+            return Err("Price is required for non-lifetime subscriptions".to_string());
+        }
+        if payload.next_payment.is_none() {
+            return Err("Next payment date is required for non-lifetime subscriptions".to_string());
+        }
+        (payload.price.unwrap(), payload.next_payment)
+    };
+
+    // 2. 更新数据库
+    let result = sqlx::query(
+        r#"
+        UPDATE subscriptions 
+        SET name = ?, price = ?, currency = ?, next_payment = ?, frequency = ?, url = ?, logo = ?
+        WHERE id = ?
+        "#
+    )
+    .bind(&payload.name)
+    .bind(price)
+    .bind(&payload.currency)
+    .bind(&next_payment)
+    .bind(payload.frequency)
+    .bind(&payload.url)
+    .bind(&payload.logo)
+    .bind(id)
+    .execute(&pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    if result.rows_affected() == 0 {
+        return Err("Subscription not found".to_string());
+    }
+
+    // 3. 返回更新后的对象
+    let sub = Subscription {
+        id,
+        name: payload.name,
+        price,
+        currency: payload.currency,
+        next_payment,
+        frequency: payload.frequency,
+        url: payload.url,
+        logo: payload.logo,
+        active: true,
+    };
+
+    Ok(Json(sub))
 }
