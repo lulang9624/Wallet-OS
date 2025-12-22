@@ -8,6 +8,16 @@ Wallet OS 是一个现代化的个人订阅管理工具，帮助您轻松跟踪�
 ![Rust](https://img.shields.io/badge/Rust-1.70+-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+<br/>
+
+<div align="center">
+    <!-- 请替换下方链接为您的真实项目截图，建议放置在 docs/screenshot.png -->
+    <!-- Please replace the link below with your actual project screenshot, e.g., docs/screenshot.png -->
+    <img src="docs/screenshot.png" alt="Wallet OS Dashboard" width="100%" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
+</div>
+
+<br/>
+
 ## ✨ 核心功能 (Features)
 
 - **💰 费用追踪**: 自动计算每月总支出，支持多币种显示。
