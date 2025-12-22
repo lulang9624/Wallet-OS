@@ -74,14 +74,15 @@
 
             <div style="display: flex; gap: 10px; margin-bottom: 10px;">
                 <div style="flex: 1;">
-                    <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 5px;">Start Date (Optional)</label>
-                    <input type="date" id="start_date" style="margin: 0;">
+                    <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 5px;">Start Date</label>
+                    <input type="date" id="start_date" style="margin: 0;" oninput="clearError()">
                 </div>
                 <div style="flex: 1;">
                     <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 5px;">Next Payment</label>
                     <input type="date" id="next_payment" oninput="clearError()" style="margin: 0;">
                 </div>
             </div>
+            <div id="start-date-error" class="error-msg">Start date is required</div>
             <div id="date-error" class="error-msg">Next payment date is required</div>
             
             <button id="btn-save" class="btn" onclick="addSubscription()">Save</button>
@@ -176,38 +177,53 @@
                 
                 // 遍历并生成 HTML
                 data.forEach(sub => {
-                    let freqLabel;
-                    if (sub.frequency === 0) {
-                        freqLabel = ''; // No label for lifetime
-                    } else if (sub.frequency === 3) {
-                        freqLabel = '/qt';
-                    } else {
-                        freqLabel = sub.frequency === 12 ? '/yr' : '/mo';
-                    }
-                    
-                    // 计算电池状态 HTML
                     // Calculate battery status HTML
                     const batteryHtml = getBatteryHtml(sub.next_payment, sub.frequency);
     
-                    // 获取 Logo URL (如果数据库中没有 logo 字段，则自动生成)
-                    // Get Logo URL (auto-generate if missing in DB)
+                    // Get Logo URL
                     const logoUrl = getLogoUrl(sub);
+
+                    // Calculate Duration / Cycle Label
+                    let durationLabel = '';
+                    if (sub.frequency === 0) {
+                        durationLabel = 'Lifetime';
+                    } else if (sub.start_date && sub.next_payment) {
+                        const start = new Date(sub.start_date);
+                        const end = new Date(sub.next_payment);
+                        if (!isNaN(start) && !isNaN(end) && end > start) {
+                            const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24));
+                            if (diffDays >= 360) {
+                                const years = Math.round(diffDays / 365);
+                                durationLabel = years === 1 ? "Yearly" : `${years} Years`;
+                            } else if (diffDays >= 28) {
+                                const months = Math.round(diffDays / 30);
+                                if (months === 1) durationLabel = "Monthly";
+                                else if (months === 3) durationLabel = "Quarterly";
+                                else durationLabel = `${months} Months`;
+                            } else {
+                                durationLabel = `${diffDays} Days`;
+                            }
+                        }
+                    }
+                    // Fallback if no dates or calc failed
+                    if (!durationLabel && sub.frequency !== 0) {
+                        if (sub.frequency === 12) durationLabel = "Yearly";
+                        else if (sub.frequency === 3) durationLabel = "Quarterly";
+                        else durationLabel = "Monthly";
+                    }
 
                     // 拼接卡片 HTML
                     list.innerHTML += `
                         <div class="sub-card">
                             <div class="sub-info">
                                 <div style="display:flex;align-items:center;">
-                                    <!-- 显示 Logo，支持三级回退策略：Google -> DuckDuckGo -> UI Avatars -->
                                     <img src="${logoUrl}" class="sub-logo" 
                                          onerror="
-                                            // 第一次失败：尝试 DuckDuckGo
                                             if(!this.dataset.triedDd) {
                                                 this.dataset.triedDd = true;
                                                 let domain = '${logoUrl}'.match(/domain=([^&]+)/)[1];
                                                 this.src = 'https://icons.duckduckgo.com/ip3/' + domain + '.ico';
                                             } 
-                                            // 第二次失败：使用 UI Avatars 显示首字母
                                             else {
                                                 this.onerror=null;
                                                 this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(sub.name)}&background=random&color=fff&size=64&rounded=true';
@@ -216,15 +232,25 @@
                                     <h3>${sub.name}</h3>
                                     ${batteryHtml}
                                 </div>
-                                <small>${sub.frequency === 0 ? 'Lifetime' : 'Next: ' + (sub.next_payment || 'N/A')}</small>
+                                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; line-height: 1.4;">
+                                    ${sub.frequency === 0 ? 
+                                        '<div>Lifetime Access</div>' : 
+                                        `
+                                        <div>
+                                            ${sub.start_date ? `<span>Start: ${sub.start_date}</span> <span style="margin:0 4px;opacity:0.3">|</span>` : ''}
+                                            <span>Next: ${sub.next_payment || 'N/A'}</span>
+                                        </div>
+                                        <div style="color: var(--text-color); margin-top: 2px; font-weight: 500;">
+                                            ${durationLabel}
+                                        </div>
+                                        `
+                                    }
+                                </div>
                             </div>
                             <div style="text-align: right;">
-                                <div class="sub-price">${sub.currency} ${sub.price}${freqLabel ? '<span style="font-size:0.8rem;color:var(--text-muted)">' + freqLabel + '</span>' : ''}</div>
-                                <!-- 续订按钮 -->
+                                <div class="sub-price">${sub.currency} ${sub.price}</div>
                                 ${sub.frequency !== 0 ? `<button style="background:none; border:none; color:var(--accent); cursor:pointer; margin-right:10px;" onclick="openRenewModal(${sub.id})">Renew</button>` : ''}
-                                <!-- 编辑按钮 -->
                                 <button style="background:none; border:none; color:var(--text-muted); cursor:pointer; margin-right:10px;" onclick="openModal(${sub.id})">Edit</button>
-                                <!-- 删除按钮，点击触发 openDeleteModal -->
                                 <button style="background:none; border:none; color:#f44336; cursor:pointer;" onclick="openDeleteModal(${sub.id})">Delete</button>
                             </div>
                         </div>
@@ -583,6 +609,7 @@
             const nameInput = document.getElementById('name');
             const priceInput = document.getElementById('price');
             const dateInput = document.getElementById('next_payment');
+            const startDateInput = document.getElementById('start_date');
             const isLifetime = document.getElementById('lifetime').checked;
             
             // Clear previous errors
@@ -605,7 +632,14 @@
                 hasError = true;
             }
 
-            // 3. Validate Date (Required unless Lifetime)
+            // 3. Validate Start Date (Required unless Lifetime)
+            if (!isLifetime && (!startDateInput.value || startDateInput.value.trim() === '')) {
+                startDateInput.classList.add('input-error');
+                document.getElementById('start-date-error').style.display = 'block';
+                hasError = true;
+            }
+
+            // 4. Validate Next Payment Date (Required unless Lifetime)
             if (!isLifetime) {
                 const errorMsg = document.getElementById('date-error');
                 
@@ -928,7 +962,11 @@
             document.getElementById('price').classList.remove('input-error');
             document.getElementById('price-error').style.display = 'none';
             
-            // Date
+            // Start Date
+            document.getElementById('start_date').classList.remove('input-error');
+            document.getElementById('start-date-error').style.display = 'none';
+
+            // Next Date
             document.getElementById('next_payment').classList.remove('input-error');
             document.getElementById('date-error').style.display = 'none';
         }
