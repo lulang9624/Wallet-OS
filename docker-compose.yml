@@ -19,11 +19,12 @@ services:
     # Volume mounting
     # 1. wallet_os_data:/app/data -> 持久化存储数据库文件，防止重启丢失数据
     #    Persist database file to avoid data loss on restart
-    # 2. ./static:/app/static -> 将本地 static 目录挂载到容器，方便开发调试前端代码
-    #    Mount local static dir to container for frontend development debugging
+    # 3. ./logs:/app/logs -> 挂载日志目录，将容器内的日志保存到宿主机
+    #    Mount logs directory to save container logs to host
     volumes:
       - ./wallet_os_data:/app/data
       - ./static:/app/static
+      - ./logs:/app/logs
     
     # 环境变量配置
     # Environment variables

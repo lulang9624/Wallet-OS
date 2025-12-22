@@ -3,22 +3,55 @@ mod handlers;
 mod models;
 
 use axum::{
-    routing::{get, post, delete, put},
+    routing::{get, delete},
     Router,
 };
 use std::net::SocketAddr;
 use tower_http::services::ServeDir;
 use tower_http::cors::CorsLayer;
+use tower_http::trace::TraceLayer;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 /// 应用程序的主入口点
 /// Main entry point of the application
 #[tokio::main]
 async fn main() {
     // 1. 初始化日志系统
-    //    tracing_subscriber 用于收集和格式化日志信息，便于开发调试和生产环境监控。
     //    Initialize the logging system.
-    //    tracing_subscriber is used to collect and format log info for debugging and monitoring.
-    tracing_subscriber::fmt::init();
+    
+    // 设置日志文件存放目录和文件名前缀
+    // Set log file directory and filename prefix
+    let file_appender = tracing_appender::rolling::daily("logs", "wallet-os.log");
+    
+    // 使用 non_blocking 包装器以避免阻塞主线程
+    // Use non_blocking wrapper to avoid blocking the main thread
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+
+    // 配置控制台输出层
+    // Configure console output layer
+    let stdout_layer = tracing_subscriber::fmt::layer()
+        .with_writer(std::io::stdout);
+
+    // 配置文件输出层
+    // Configure file output layer
+    let file_layer = tracing_subscriber::fmt::layer()
+        .with_writer(non_blocking)
+        .with_ansi(false); // 文件中不包含 ANSI 颜色代码 / No ANSI color codes in file
+
+    // 配置环境变量过滤器
+    // Configure environment variable filter
+    // 默认开启 wallet_os=debug, tower_http=debug, sqlx=info
+    // Default to wallet_os=debug, tower_http=debug, sqlx=info
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| "wallet_os=debug,tower_http=debug,sqlx=info".into());
+
+    // 注册订阅者
+    // Register subscriber
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(stdout_layer)
+        .with(file_layer)
+        .init();
 
     // 2. 初始化数据库连接池
     //    调用 db 模块的 init_db 函数，建立与 SQLite 数据库的连接。
@@ -56,6 +89,12 @@ async fn main() {
         // Middleware: CORS (Cross-Origin Resource Sharing).
         // Allows requests from different origins, facilitating frontend-backend debugging.
         .layer(CorsLayer::permissive())
+
+        // 中间件：Trace (日志追踪)
+        // 自动记录 HTTP 请求日志
+        // Middleware: Trace (Logging)
+        // Automatically log HTTP requests
+        .layer(TraceLayer::new_for_http())
         
         // 状态共享
         // 将数据库连接池注入到应用状态中，使所有处理函数都能访问数据库。
@@ -68,7 +107,7 @@ async fn main() {
     //    Configure server listening address.
     //    Listens on port 80 of all network interfaces (0.0.0.0).
     let addr = SocketAddr::from(([0, 0, 0, 0], 80));
-    println!("Listening on {}", addr);
+    tracing::info!("Listening on {}", addr);
     
     // 绑定 TCP 监听器
     // Bind the TCP listener.

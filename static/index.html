@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wallos Next</title>
+    <title>Wallet OS</title>
     <!-- 引入外部样式表 (Import external stylesheet) -->
     <link rel="stylesheet" href="style.css">
 </head>
@@ -19,7 +19,7 @@
                 <div class="value" id="total-cost">...</div>
             </div>
             <div class="stat-box">
-                <h3>Active Subs</h3>
+                <h3>Active / Expired</h3>
                 <div class="value" id="active-count">...</div>
             </div>
         </div>
@@ -54,6 +54,7 @@
             <div style="display: flex; align-items: center; margin-bottom: 10px;">
                 <select id="frequency" style="flex: 1; margin-bottom: 0;">
                     <option value="1">Monthly</option>
+                    <option value="3">Quarterly</option>
                     <option value="12">Yearly</option>
                 </select>
                 <div style="margin-left: 15px; display: flex; align-items: center;">
@@ -123,6 +124,8 @@
                     let freqLabel;
                     if (sub.frequency === 0) {
                         freqLabel = ''; // No label for lifetime
+                    } else if (sub.frequency === 3) {
+                        freqLabel = '/qt';
                     } else {
                         freqLabel = sub.frequency === 12 ? '/yr' : '/mo';
                     }
@@ -162,6 +165,8 @@
                             </div>
                             <div style="text-align: right;">
                                 <div class="sub-price">${sub.currency} ${sub.price}${freqLabel ? '<span style="font-size:0.8rem;color:#aaa">' + freqLabel + '</span>' : ''}</div>
+                                <!-- 续订按钮 -->
+                                ${sub.frequency !== 0 ? `<button style="background:none; border:none; color:var(--accent); cursor:pointer; margin-right:10px;" onclick="openRenewModal(${sub.id})">Renew</button>` : ''}
                                 <!-- 编辑按钮 -->
                                 <button style="background:none; border:none; color:var(--text-muted); cursor:pointer; margin-right:10px;" onclick="openModal(${sub.id})">Edit</button>
                                 <!-- 删除按钮，点击触发 openDeleteModal -->
@@ -236,7 +241,7 @@
 
             // 估算周期长度（天）用于计算百分比
             // Estimate cycle length (days) for percentage calculation
-            const cycleDays = frequency === 12 ? 365 : 30;
+            const cycleDays = frequency === 12 ? 365 : (frequency === 3 ? 90 : 30);
             
             // 计算百分比 (剩余天数 / 周期)
             // Calculate percentage (days left / cycle)
@@ -361,26 +366,93 @@
          * Calculate and display statistics
          */
         function renderStats(subs) {
-            let total = 0;
-            // 简单取第一个订阅的货币单位，实际应用可能需要更复杂的货币转换逻辑
-            // Simply use the currency of the first subscription
-            let currency = subs.length > 0 ? subs[0].currency : 'CNY';
+            // 使用对象存储不同货币的总额
+            // Use object to store totals for different currencies
+            let totals = {};
+            const now = new Date();
+            now.setHours(0,0,0,0);
             
             subs.forEach(sub => {
                 // 忽略永久订阅 (不计入月费)
                 // Ignore lifetime subscriptions (not counted in monthly cost)
                 if (sub.frequency === 0) return;
 
+                // 忽略已过期的订阅
+                // Ignore expired subscriptions
+                if (sub.next_payment) {
+                    const nextDate = new Date(sub.next_payment);
+                    nextDate.setHours(0,0,0,0);
+                    if (nextDate < now) {
+                        return;
+                    }
+                }
+
+                // 初始化该货币的总额
+                // Initialize total for this currency
+                if (!totals[sub.currency]) {
+                    totals[sub.currency] = 0;
+                }
+
                 // 将年付金额分摊到每月
                 // Amortize yearly payments to monthly
                 if(sub.frequency === 12) {
-                    total += sub.price / 12;
+                    totals[sub.currency] += sub.price / 12;
+                } else if(sub.frequency === 3) {
+                    totals[sub.currency] += sub.price / 3;
+                } else if(sub.frequency === 1) {
+                    totals[sub.currency] += sub.price;
+                }
+                // Lifetime (frequency === 0) costs are NOT added to monthly total
+            });
+
+            // 拼接显示字符串
+            // Build display string
+            let totalHtml = '';
+            const currencies = Object.keys(totals);
+            
+            if (currencies.length === 0) {
+                totalHtml = '0.00';
+            } else {
+                totalHtml = currencies.map(currency => {
+                    return `<div>${currency} ${totals[currency].toFixed(2)}</div>`;
+                }).join('');
+            }
+
+            document.getElementById('total-cost').innerHTML = totalHtml;
+            
+            // 计算活跃与过期订阅
+            // Calculate active vs expired subscriptions
+            let activeCount = 0;
+            let expiredCount = 0;
+            // now 已经在上面定义了
+            // now is already defined above
+
+            subs.forEach(sub => {
+                // Lifetime is always active
+                if (sub.frequency === 0) {
+                    activeCount++;
+                    return;
+                }
+
+                if (!sub.next_payment) {
+                    activeCount++;
+                    return;
+                }
+
+                const nextDate = new Date(sub.next_payment);
+                nextDate.setHours(0,0,0,0);
+                
+                if (nextDate < now) {
+                    expiredCount++;
                 } else {
-                    total += sub.price;
+                    activeCount++;
                 }
             });
-            document.getElementById('total-cost').innerText = currency + ' ' + total.toFixed(2);
-            document.getElementById('active-count').innerText = subs.length;
+
+            document.getElementById('active-count').innerHTML = `
+                <span style="color: #4caf50" title="Active">${activeCount}</span> / 
+                <span style="color: #f44336" title="Expired">${expiredCount}</span>
+            `;
         }
 
         /**
@@ -446,10 +518,23 @@
             }
 
             // 3. Validate Date (Required unless Lifetime)
-            if (!isLifetime && (!dateInput.value || dateInput.value.trim() === '')) {
-                dateInput.classList.add('input-error');
-                document.getElementById('date-error').style.display = 'block';
-                hasError = true;
+            if (!isLifetime) {
+                const errorMsg = document.getElementById('date-error');
+                
+                // Check for invalid date (e.g. Feb 31) which results in empty value but badInput=true
+                if (dateInput.validity && dateInput.validity.badInput) {
+                    dateInput.classList.add('input-error');
+                    errorMsg.innerText = "Invalid date";
+                    errorMsg.style.display = 'block';
+                    hasError = true;
+                } 
+                // Check for empty value
+                else if (!dateInput.value || dateInput.value.trim() === '') {
+                    dateInput.classList.add('input-error');
+                    errorMsg.innerText = "Next payment date is required";
+                    errorMsg.style.display = 'block';
+                    hasError = true;
+                }
             }
             
             if (hasError) return;
@@ -591,6 +676,70 @@
         let isEditMode = false;
         let editId = null;
         let originalLogo = "";
+
+        /**
+         * 打开续订模态框
+         * Open Renew Modal
+         * 
+         * 复用编辑模态框，但预填充计算后的日期，允许用户修改价格或日期
+         * Reuses edit modal, but pre-fills calculated date, allowing user to modify price or date
+         */
+        function openRenewModal(id) {
+            const sub = currentSubs.find(s => s.id === id);
+            if (!sub || sub.frequency === 0 || !sub.next_payment) {
+                alert("Cannot renew this subscription.");
+                return;
+            }
+
+            // 计算推荐的下次付款日期
+            // Calculate recommended next payment date
+            const currentNext = new Date(sub.next_payment);
+            let nextDate = new Date(currentNext);
+            
+            // 辅助函数：智能增加月份（处理月末逻辑）
+            // Helper: Smart add months (handle end-of-month logic)
+            const addMonths = (date, months) => {
+                const d = date.getDate();
+                date.setMonth(date.getMonth() + months);
+                // 如果日期发生变化（例如 1.31 -> 3.3），说明目标月份没有那一天，回退到月末
+                // If date changes (e.g. 1.31 -> 3.3), it means target month lacks that day, snap to end of month
+                if (date.getDate() !== d) {
+                    date.setDate(0);
+                }
+            };
+
+            // 增加一个周期
+            if (sub.frequency === 12) {
+                // 年付也需要处理闰年逻辑 (2.29 -> 2.28)
+                const d = nextDate.getDate();
+                nextDate.setFullYear(nextDate.getFullYear() + 1);
+                if (nextDate.getDate() !== d) {
+                    nextDate.setDate(0);
+                }
+            } else if (sub.frequency === 3) {
+                addMonths(nextDate, 3);
+            } else {
+                addMonths(nextDate, 1);
+            }
+            
+            const nextDateStr = nextDate.toISOString().split('T')[0];
+
+            // 复用 openModal 逻辑，但在 UI 上做区分
+            // Reuse openModal logic, but distinguish in UI
+            openModal(id);
+            
+            // 覆盖 openModal 设置的部分 UI
+            // Override some UI set by openModal
+            const modalTitle = document.querySelector('#addModal h2');
+            const btnSave = document.getElementById('btn-save');
+            
+            modalTitle.innerText = "Renew Subscription";
+            btnSave.innerText = "Confirm Renewal";
+            
+            // 预填充计算后的日期
+            // Pre-fill calculated date
+            document.getElementById('next_payment').value = nextDateStr;
+        }
 
         // ==============================
         // 通用模态框控制 (Modal Controls)

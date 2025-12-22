@@ -32,9 +32,17 @@ tower-http = { version = "0.5", features = ["fs", "cors", "trace"] }
 # Logging and tracing library
 tracing = "0.1"
 
+# 标准日志库，用于 sqlx 的日志级别配置
+# Standard logging library, used for sqlx log level configuration
+log = "0.4"
+
 # 日志订阅者，用于格式化日志输出
 # Log subscriber for formatting log output
-tracing-subscriber = "0.3"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# 日志文件追加器，用于将日志写入文件
+# Log file appender, used to write logs to files
+tracing-appender = "0.2"
 
 # 时间处理库
 # Date and time handling library

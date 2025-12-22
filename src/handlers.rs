@@ -11,6 +11,7 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
+use tracing::{info, warn, debug};
 
 #[derive(Deserialize)]
 pub struct SearchQuery {
@@ -56,7 +57,7 @@ pub async fn search_domain(
         return Err("Query is empty".to_string());
     }
 
-    println!("Searching for: {}", query);
+    info!("Searching for: {}", query);
 
     // 1. 尝试 DuckDuckGo API (JSON)
     // Try DuckDuckGo API (JSON) first
@@ -77,7 +78,7 @@ pub async fn search_domain(
                         if !url.is_empty() {
                             if let Ok(parsed) = url::Url::parse(&url) {
                                 if let Some(domain) = parsed.host_str() {
-                                    println!("Found via API (OfficialWebsite): {}", domain);
+                                    info!("Found via API (OfficialWebsite): {}", domain);
                                     return Ok(Json(SearchResult {
                                         domain: domain.to_string(),
                                     }));
@@ -92,7 +93,7 @@ pub async fn search_domain(
                             if let Ok(parsed) = url::Url::parse(&url) {
                                 if let Some(domain) = parsed.host_str() {
                                     if !domain.contains("wikipedia.org") {
-                                        println!("Found via API (AbstractURL): {}", domain);
+                                        info!("Found via API (AbstractURL): {}", domain);
                                         return Ok(Json(SearchResult {
                                             domain: domain.to_string(),
                                         }));
@@ -109,7 +110,7 @@ pub async fn search_domain(
                                 if !url.is_empty() {
                                     if let Ok(parsed) = url::Url::parse(&url) {
                                         if let Some(domain) = parsed.host_str() {
-                                            println!("Found via API (Results): {}", domain);
+                                            info!("Found via API (Results): {}", domain);
                                             return Ok(Json(SearchResult {
                                                 domain: domain.to_string(),
                                             }));
@@ -122,15 +123,15 @@ pub async fn search_domain(
                 }
             }
         },
-        Err(e) => println!("API request failed: {}", e),
+        Err(e) => warn!("API request failed: {}", e),
     }
 
-    println!("API failed to find domain, falling back to HTML search...");
+    info!("API failed to find domain, falling back to HTML search...");
 
     // 2. 回退到 DuckDuckGo HTML 搜索
     // Fallback to DuckDuckGo HTML search
     let url = format!("https://html.duckduckgo.com/html/?q={}", urlencoding::encode(query));
-    println!("Searching: {}", url);
+    debug!("Searching: {}", url);
 
     // 发送请求
     let resp = client.get(&url)
@@ -145,7 +146,7 @@ pub async fn search_domain(
         .await
         .map_err(|e| e.to_string())?;
     
-    println!("Response length: {}", resp.len());
+    debug!("Response length: {}", resp.len());
     // if resp.len() < 1000 {
     //      println!("Response body: {}", resp);
     // }
@@ -157,7 +158,7 @@ pub async fn search_domain(
 
     for element in document.select(&selector) {
         if let Some(href) = element.value().attr("href") {
-            println!("Found candidate link: {}", href);
+            debug!("Found candidate link: {}", href);
             
             let actual_url = if href.starts_with("/l/") {
                 if let Some(start) = href.find("uddg=") {
@@ -182,7 +183,7 @@ pub async fn search_domain(
                         continue;
                     }
                     
-                    println!("Found domain: {}", domain);
+                    info!("Found domain: {}", domain);
                     return Ok(Json(SearchResult {
                         domain: domain.to_string(),
                     }));

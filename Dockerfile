@@ -2,7 +2,7 @@
 # 阶段 1: 构建阶段
 # 使用 Rust 官方镜像作为构建环境，基于 Debian Bookworm Slim 版本
 # Uses official Rust image as build environment, based on Debian Bookworm Slim
-FROM rust:1-slim-bookworm as builder
+FROM rust:1-slim-bookworm AS builder
 
 WORKDIR /usr/src/app
 

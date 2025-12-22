@@ -61,9 +61,23 @@ pub async fn init_db() -> Result<DbPool, sqlx::Error> {
     //    Create connection pool
     //    max_connections(10): 设置最大并发连接数为 10
     //    max_connections(10): Sets maximum concurrent connections to 10
+    
+    // 配置连接选项以启用日志
+    // Configure connection options to enable logging
+    use std::str::FromStr;
+    use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
+    use sqlx::ConnectOptions; // 必须引入此 trait 才能调用 log_statements
+    
+    // 解析数据库连接字符串
+    // Parse database connection string
+    let connect_options = SqliteConnectOptions::from_str(&database_url)?
+        .journal_mode(SqliteJournalMode::Wal) // 开启 WAL 模式以提高并发性能 / Enable WAL mode for better concurrency
+        .create_if_missing(true)
+        .log_statements(log::LevelFilter::Info); // 链式调用 log_statements
+
     let pool = SqlitePoolOptions::new()
         .max_connections(10)
-        .connect(&database_url)
+        .connect_with(connect_options)
         .await?;
 
     // 4. 数据库迁移 (创建表)
