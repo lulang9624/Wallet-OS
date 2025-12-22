@@ -21,11 +21,14 @@ Wallet OS 是一个现代化的个人订阅管理工具，帮助您轻松跟踪�
 ## ✨ 核心功能 (Features)
 
 - **💰 费用追踪**: 自动计算每月总支出，支持多币种显示。
+  - **精确计算**: 对于非月付/年付的订阅（如四年付），支持通过“开始日期”精确计算月均分摊费用。
 - **🔋 续费倒计时**: 独特的“电池电量”可视化效果，直观展示距离下次扣费的天数（绿色->红色->灰色）。
+- **♾️ 永久订阅支持**: 支持记录一次性买断（Lifetime）的软件或服务，不计入每月经常性支出。
 - **🔍 智能图标匹配**: 
   - 输入订阅名称（如 "iqiyi"）自动搜索并匹配官方高清图标。
   - 支持“三级回退”策略 (Google -> DuckDuckGo -> UI Avatars)，确保 100% 有图显示。
   - **秒级响应**: 采用 Promise 预加载技术，在您填写表单时后台自动完成搜索。
+- **✏️ 灵活编辑**: 支持随时修改订阅信息（名称、价格、周期等），并在编辑时自动重新匹配图标。
 - **🛡️ 安全删除**: 删除订阅时需要输入名称确认，防止误操作。
 - **⚡ 高性能**: 基于 Rust + Axum 构建，占用资源极低，响应速度极快。
 - **🐳 轻松部署**: 提供 Docker 和 Docker Compose 支持，一键启动。
@@ -280,12 +283,12 @@ sudo ./target/release/wallet-os
           if payload.next_payment.is_none() { return Err("Next payment date is required for non-lifetime subscriptions".to_string()); }
           (payload.price.unwrap(), payload.next_payment)
       };
-      let id = sqlx::query(r#"INSERT INTO subscriptions (name, price, currency, next_payment, frequency, url, logo) VALUES (?, ?, ?, ?, ?, ?, ?)"#)
-          .bind(&payload.name).bind(price).bind(&payload.currency).bind(&next_payment).bind(payload.frequency).bind(&payload.url).bind(&payload.logo)
+      let id = sqlx::query(r#"INSERT INTO subscriptions (name, price, currency, next_payment, frequency, url, logo, start_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"#)
+          .bind(&payload.name).bind(price).bind(&payload.currency).bind(&next_payment).bind(payload.frequency).bind(&payload.url).bind(&payload.logo).bind(&payload.start_date)
           .execute(&pool).await.map_err(|e| e.to_string())?.last_insert_rowid();
-      Ok(Json(Subscription { id, name: payload.name, price, currency: payload.currency, next_payment, frequency: payload.frequency, url: payload.url, logo: payload.logo, active: true }))
+      Ok(Json(Subscription { id, name: payload.name, price, currency: payload.currency, next_payment, frequency: payload.frequency, url: payload.url, logo: payload.logo, start_date: payload.start_date, active: true }))
   }
-  
+
   pub async fn update_subscription(State(pool): State<DbPool>, Path(id): Path<i64>, Json(payload): Json<CreateSubscription>) -> Result<Json<Subscription>, String> {
       if payload.name.trim().is_empty() { return Err("Name is required".to_string()); }
       if ![0,1,3,12].contains(&payload.frequency) { return Err("Invalid frequency".to_string()); }
@@ -296,11 +299,11 @@ sudo ./target/release/wallet-os
           if payload.next_payment.is_none() { return Err("Next payment date is required for non-lifetime subscriptions".to_string()); }
           (payload.price.unwrap(), payload.next_payment)
       };
-      let result = sqlx::query(r#"UPDATE subscriptions SET name = ?, price = ?, currency = ?, next_payment = ?, frequency = ?, url = ?, logo = ? WHERE id = ?"#)
-          .bind(&payload.name).bind(price).bind(&payload.currency).bind(&next_payment).bind(payload.frequency).bind(&payload.url).bind(&payload.logo).bind(id)
+      let result = sqlx::query(r#"UPDATE subscriptions SET name = ?, price = ?, currency = ?, next_payment = ?, frequency = ?, url = ?, logo = ?, start_date = ? WHERE id = ?"#)
+          .bind(&payload.name).bind(price).bind(&payload.currency).bind(&next_payment).bind(payload.frequency).bind(&payload.url).bind(&payload.logo).bind(&payload.start_date).bind(id)
           .execute(&pool).await.map_err(|e| e.to_string())?;
       if result.rows_affected() == 0 { return Err("Subscription not found".to_string()); }
-      Ok(Json(Subscription { id, name: payload.name, price, currency: payload.currency, next_payment, frequency: payload.frequency, url: payload.url, logo: payload.logo, active: true }))
+      Ok(Json(Subscription { id, name: payload.name, price, currency: payload.currency, next_payment, frequency: payload.frequency, url: payload.url, logo: payload.logo, start_date: payload.start_date, active: true }))
   }
   
   pub async fn delete_subscription(State(pool): State<DbPool>, Path(id): Path<i64>) -> Result<Json<serde_json::Value>, String> {
@@ -335,6 +338,7 @@ sudo ./target/release/wallet-os
               frequency INTEGER DEFAULT 1,
               url TEXT,
               logo TEXT,
+              start_date DATE,
               active BOOLEAN DEFAULT 1
           );
           CREATE INDEX IF NOT EXISTS idx_subscriptions_next_payment ON subscriptions(next_payment);
@@ -360,6 +364,7 @@ sudo ./target/release/wallet-os
       pub frequency: i64,
       pub url: Option<String>,
       pub logo: Option<String>,
+      pub start_date: Option<String>,
       pub active: bool,
   }
   ```

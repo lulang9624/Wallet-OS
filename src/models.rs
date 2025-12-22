@@ -52,6 +52,10 @@ pub struct Subscription {
     /// Logo image URL (optional)
     pub logo: Option<String>,
     
+    /// 订阅开始日期 (格式: YYYY-MM-DD, 可选)
+    /// Subscription start date (Format: YYYY-MM-DD, optional)
+    pub start_date: Option<String>,
+
     /// 是否处于激活状态 (true = 激活, false = 停用)
     /// Whether it is active
     pub active: bool,
@@ -93,4 +97,8 @@ pub struct CreateSubscription {
     /// Logo 图片链接
     /// Logo image URL
     pub logo: Option<String>,
+
+    /// 订阅开始日期 (可选)
+    /// Subscription start date (Optional)
+    pub start_date: Option<String>,
 }

@@ -13,8 +13,8 @@ use axum::{
     response::IntoResponse,
 };
 use axum::response::Response;
-use http::header::{CONTENT_TYPE, CACHE_CONTROL};
-use http::HeaderValue;
+use axum::http::header::{CONTENT_TYPE, CACHE_CONTROL};
+use axum::http::HeaderValue;
 use tokio::fs;
 use tokio::io::AsyncReadExt;
 use serde::{Deserialize, Serialize};
@@ -362,8 +362,8 @@ pub async fn create_subscription(
     //    Execute INSERT statement and get the newly generated ID
     let id = sqlx::query(
         r#"
-        INSERT INTO subscriptions (name, price, currency, next_payment, frequency, url, logo)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO subscriptions (name, price, currency, next_payment, frequency, url, logo, start_date)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         "#
     )
     .bind(&payload.name)
@@ -373,6 +373,7 @@ pub async fn create_subscription(
     .bind(payload.frequency)
     .bind(&payload.url)
     .bind(&payload.logo)
+    .bind(&payload.start_date)
     .execute(&pool)
     .await
     .map_err(|e| e.to_string())?
@@ -391,6 +392,7 @@ pub async fn create_subscription(
         frequency: payload.frequency,
         url: payload.url,
         logo: payload.logo,
+        start_date: payload.start_date,
         active: true, // 默认为激活状态 Default to active
     };
 
@@ -453,7 +455,7 @@ pub async fn update_subscription(
     let result = sqlx::query(
         r#"
         UPDATE subscriptions 
-        SET name = ?, price = ?, currency = ?, next_payment = ?, frequency = ?, url = ?, logo = ?
+        SET name = ?, price = ?, currency = ?, next_payment = ?, frequency = ?, url = ?, logo = ?, start_date = ?
         WHERE id = ?
         "#
     )
@@ -464,6 +466,7 @@ pub async fn update_subscription(
     .bind(payload.frequency)
     .bind(&payload.url)
     .bind(&payload.logo)
+    .bind(&payload.start_date)
     .bind(id)
     .execute(&pool)
     .await
@@ -483,6 +486,7 @@ pub async fn update_subscription(
         frequency: payload.frequency,
         url: payload.url,
         logo: payload.logo,
+        start_date: payload.start_date,
         active: true,
     };
 

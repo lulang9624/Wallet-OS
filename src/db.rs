@@ -104,5 +104,13 @@ pub async fn init_db() -> Result<DbPool, sqlx::Error> {
     .execute(&pool)
     .await?;
 
+    // 尝试添加 start_date 列 (用于旧数据库迁移)
+    // Attempt to add start_date column (for migration of existing db)
+    // 如果列已存在，这会失败，我们忽略错误
+    // If column exists, this will fail, we ignore the error
+    let _ = sqlx::query("ALTER TABLE subscriptions ADD COLUMN start_date DATE")
+        .execute(&pool)
+        .await;
+
     Ok(pool)
 }
