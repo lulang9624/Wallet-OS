@@ -13,6 +13,7 @@ Thumbs.db
 
 # Environment variables
 .env
+ai-assistant-api.env
 
 # IDE
 .idea/

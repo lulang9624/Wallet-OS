@@ -33,6 +33,11 @@ services:
     environment:
       - DATABASE_URL=sqlite:/app/data/wallet-os.db
     
+    # 加载外部环境变量文件 (用于 AI 配置)
+    # Load external environment file (for AI config)
+    env_file:
+      - ai-assistant-api.env
+    
     # 重启策略
     # Restart policy
     # 除非被手动停止，否则自动重启（例如崩溃或系统重启后）

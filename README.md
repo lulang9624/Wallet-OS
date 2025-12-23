@@ -84,13 +84,21 @@ Wallet OS 是一个现代化的个人订阅管理工具，帮助您轻松跟踪�
    # 首次运行会自动下载依赖并编译
    cargo run
    ```
-默认监听端口为 `80`，在 Linux 下可能需要使用 `sudo cargo run`。
+默认监听端口为 `80`，在 Linux 下可能需要使用 `sudo cargo run`。如果需要自定义端口，可设置环境变量 `PORT`，例如：`PORT=8080 cargo run`。
 
 ### 环境变量 (Environment)
 
 - `DATABASE_URL`: SQLite 连接字符串，默认值为 `sqlite:wallet-os.db`。
   - 示例（自定义路径）：`export DATABASE_URL=sqlite:./wallet_os_data/wallet-os.db`
   - 首次启动会自动创建数据库文件与父目录。
+- `PORT`: 后端服务监听端口，默认 `80`。
+
+#### AI 相关 (Optional)
+
+- `OPENAI_API_KEY`: 启用智能解析与分析功能所需的密钥。
+- `OPENAI_API_BASE`: API Base，可选；默认 `https://api.openai.com/v1`。
+- `OPENAI_MODEL`: 模型名称，可选；默认 `gpt-3.5-turbo`。
+- `static/prompts.json`: 可自定义系统提示与用户模板；若缺失则使用代码内置默认。
 
 ### 日志 (Logs)
 
@@ -129,15 +137,12 @@ sudo ./target/release/wallet-os
 └── README.md        # 项目文档
 ```
 
-## 🔌 API 接口 (API Endpoints)
+## 🔔 实时更新 (Realtime)
 
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| `GET` | `/api/subscriptions` | 获取所有订阅列表 (按下次付款时间排序) |
-| `POST` | `/api/subscriptions` | 创建新订阅 (自动触发图标匹配) |
-| `DELETE` | `/api/subscriptions/:id` | 删除指定订阅 |
-| `PUT` | `/api/subscriptions/:id` | 更新指定订阅 |
-| `GET` | `/api/search?q={name}` | **核心功能**: 根据名称搜索官网域名 (DuckDuckGo 源) |
+- 前端通过 `EventSource` 监听 `GET /api/stream` 的 Server-Sent Events。
+- 当后端检测到订阅数据变更时，会推送一个 `"update"` 事件。
+- 前端接收事件后调用列表接口刷新展示，避免轮询带来的额外开销。
+
 
 ## 🧠 核心代码 (Core Code)
 

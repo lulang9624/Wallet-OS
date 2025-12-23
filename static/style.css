@@ -23,6 +23,11 @@
     --text-muted: #aaa;
     --input-bg: #3d3d3d;
     --input-text: #ffffff;
+    /* Markdown theme vars (dark) */
+    --md-code-bg: rgba(255,255,255,0.1);
+    --md-pre-bg: rgba(0,0,0,0.3);
+    --md-table-bg: rgba(255,255,255,0.02);
+    --md-border: rgba(255,255,255,0.1);
 }
 
 :root[data-theme="light"] {
@@ -35,6 +40,11 @@
     --text-muted: #777777;
     --input-bg: #f0f0f0;
     --input-text: #222222;
+    /* Markdown theme vars (light) */
+    --md-code-bg: rgba(0,0,0,0.05);
+    --md-pre-bg: #f6f8fa;
+    --md-table-bg: #ffffff;
+    --md-border: #e0e0e0;
 }
 
 :root.theme-transition * {
@@ -267,6 +277,11 @@ input:focus, select:focus {
     animation: modalSlideIn 0.3s ease-out;
 }
 
+/* Light mode overrides for AI Report container */
+:root[data-theme="light"] #analyzeModal .modal-content #analyze-result {
+    background: rgba(0,0,0,0.05) !important;
+    color: var(--text-color);
+}
 @keyframes modalSlideIn {
     from { transform: translateY(-30px); opacity: 0; }
     to { transform: translateY(0); opacity: 1; }

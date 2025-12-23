@@ -28,6 +28,190 @@ use axum::response::sse::{Sse, Event, KeepAlive};
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 use std::convert::Infallible;
+use chrono::Datelike;
+
+#[derive(Deserialize)]
+pub struct SmartParseRequest {
+    text: String,
+}
+
+/// 智能解析订阅信息 (POST /api/smart-parse)
+/// Smart parse subscription info
+#[axum::debug_handler]
+pub async fn smart_parse(
+    Json(payload): Json<SmartParseRequest>,
+) -> impl IntoResponse {
+    let text = payload.text;
+    info!("Smart parse request: {}", text);
+
+    // 1. 尝试从环境变量获取 API Key
+    // 1. Try to get API Key from env vars
+    let api_key = std::env::var("OPENAI_API_KEY").ok();
+    let api_base = std::env::var("OPENAI_API_BASE").unwrap_or_else(|_| "https://api.openai.com/v1".to_string());
+
+    if let Some(key) = api_key {
+        // 调用 LLM API
+        // Call LLM API
+        let client = reqwest::Client::new();
+        let model = std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-3.5-turbo".to_string());
+        
+        let prompts = get_prompts();
+        let template = prompts.smart_parse_user_template.unwrap_or_else(|| default_prompts().smart_parse_user_template.unwrap());
+        let prompt = template.replace("{text}", &text);
+        debug!("smart_parse prompt loaded from prompts.json");
+
+        let body = serde_json::json!({
+            "model": model,
+            "messages": [
+                {"role": "system", "content": prompts.smart_parse_system.unwrap_or_else(|| default_prompts().smart_parse_system.unwrap())},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.1
+        });
+
+        match client.post(format!("{}/chat/completions", api_base))
+            .header("Authorization", format!("Bearer {}", key))
+            .json(&body)
+            .send()
+            .await 
+        {
+            Ok(res) => {
+                if let Ok(json) = res.json::<serde_json::Value>().await {
+                    if let Some(content) = json["choices"][0]["message"]["content"].as_str() {
+                        // 尝试清理 markdown 代码块标记
+                        // Try to clean markdown code block markers
+                        let clean_content = content.trim().trim_start_matches("```json").trim_start_matches("```").trim_end_matches("```");
+                        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(clean_content) {
+                            return Json(parsed).into_response();
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("LLM API call failed: {}", e);
+            }
+        }
+    }
+
+    // 2. 降级方案 / 演示模式 (Mock Mode)
+    // 2. Fallback / Mock Mode
+    // 简单的关键词匹配用于演示
+    let mut mock_data = serde_json::json!({
+        "name": "Unknown Subscription",
+        "price": 0,
+        "currency": "CNY",
+        "frequency": 1,
+        "start_date": "2025-12-23",
+        "next_payment": "2026-01-23"
+    });
+
+    let lower_text = text.to_lowercase();
+    if lower_text.contains("netflix") {
+        mock_data["name"] = "Netflix".into();
+        mock_data["price"] = 15.99.into();
+        mock_data["currency"] = "USD".into();
+    } else if lower_text.contains("spotify") {
+        mock_data["name"] = "Spotify".into();
+        mock_data["price"] = 10.99.into();
+        mock_data["currency"] = "USD".into();
+    } else if lower_text.contains("chatgpt") {
+        mock_data["name"] = "ChatGPT Plus".into();
+        mock_data["price"] = 20.00.into();
+        mock_data["currency"] = "USD".into();
+    }
+
+    // 尝试提取数字作为价格
+    // Try to extract number as price
+    if let Some(price_match) = text.split_whitespace().find(|s| s.parse::<f64>().is_ok()) {
+        if let Ok(p) = price_match.parse::<f64>() {
+            mock_data["price"] = p.into();
+        }
+    }
+
+    Json(mock_data).into_response()
+}
+
+/// 财务分析 (POST /api/analyze)
+/// Financial Analysis
+#[axum::debug_handler]
+pub async fn analyze_spending(
+    State(pool): State<DbPool>,
+) -> impl IntoResponse {
+    // 1. 获取所有活跃订阅
+    // 1. Get all active subscriptions
+    let subs = match sqlx::query_as::<_, Subscription>("SELECT * FROM subscriptions")
+        .fetch_all(&pool)
+        .await 
+    {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "DB Error").into_response(),
+    };
+
+    // 2. 构造 Prompt 数据
+    // 2. Construct Prompt Data
+    let mut data_str = String::new();
+    for sub in &subs {
+        let freq_str = match sub.frequency {
+            -1 => "Daily",
+            1 => "Monthly",
+            3 => "Quarterly",
+            12 => "Yearly",
+            0 => "Lifetime",
+            _ => "Unknown"
+        };
+        let start = sub.start_date.as_deref().unwrap_or("N/A");
+        let end = sub.next_payment.as_deref().unwrap_or("N/A");
+        data_str.push_str(&format!("- {} | {} | price={} {} | start={} | end={}\n", sub.name, freq_str, sub.price, sub.currency, start, end));
+    }
+
+    
+
+    // 3. 调用 LLM (或 Mock) 获取建议文本（不让其改动金额，只做建议描述）
+    // 3. Call LLM (or Mock) to get advisory text (do not change computed amounts)
+    let api_key = std::env::var("OPENAI_API_KEY").ok();
+    let api_base = std::env::var("OPENAI_API_BASE").unwrap_or_else(|_| "https://api.openai.com/v1".to_string());
+
+    let advisory_text = if let Some(key) = api_key {
+        let client = reqwest::Client::new();
+        let model = std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-3.5-turbo".to_string());
+
+        let prompts = get_prompts();
+        let template = prompts.analyze_user_template.unwrap_or_else(|| default_prompts().analyze_user_template.unwrap());
+        let prompt = template.replace("{list}", &data_str);
+        debug!("analyze prompt loaded from prompts.json");
+
+        let body = serde_json::json!({
+            "model": model,
+            "messages": [
+                {"role": "system", "content": prompts.analyze_system.unwrap_or_else(|| default_prompts().analyze_system.unwrap())},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.3
+        });
+
+        match client.post(format!("{}/chat/completions", api_base))
+            .header("Authorization", format!("Bearer {}", key))
+            .json(&body)
+            .send()
+            .await 
+        {
+            Ok(res) => {
+                if let Ok(json) = res.json::<serde_json::Value>().await {
+                    json["choices"][0]["message"]["content"].as_str().unwrap_or("建议生成失败").to_string()
+                } else {
+                    "建议生成失败".to_string()
+                }
+            }
+            Err(_) => "建议生成失败".to_string()
+        }
+    } else {
+        // Mock 建议
+        "- 检查是否存在功能重叠的订阅，避免重复付费。\n- 长期使用的工具优先考虑年度方案或一次性买断。\n- 对低使用频率的订阅进行降级或暂停。".to_string()
+    };
+
+    let final_md = format!("### 订阅优化建议\n\n{}", advisory_text);
+    Json(serde_json::json!({ "analysis": final_md })).into_response()
+}
 
 /// 域名搜索结果内存缓存
 /// In-memory cache for domain search results
@@ -42,6 +226,31 @@ static BROADCAST: Lazy<broadcast::Sender<()>> = Lazy::new(|| {
     let (tx, _rx) = broadcast::channel(100);
     tx
 });
+
+#[derive(Clone, Deserialize)]
+struct Prompts {
+    smart_parse_system: Option<String>,
+    smart_parse_user_template: Option<String>,
+    analyze_system: Option<String>,
+    analyze_user_template: Option<String>,
+}
+
+fn default_prompts() -> Prompts {
+    Prompts {
+        smart_parse_system: Some("You are a helpful assistant that extracts JSON.".to_string()),
+        smart_parse_user_template: Some("You are a subscription data extractor. Extract details from this text: '{text}'. Return ONLY a valid JSON object with these fields: name (string), price (number), currency (string, e.g. CNY, USD), start_date (string YYYY-MM-DD, assume today is 2025-12-23 if 'today'), next_payment (string YYYY-MM-DD, synonymous with end_date), frequency (number: -1=daily, 1=monthly, 3=quarterly, 12=yearly, 0=lifetime). If missing, guess or leave null.".to_string()),
+        analyze_system: Some("You are a financial advisor.".to_string()),
+        analyze_user_template: Some("作为订阅优化顾问，请仅依据下面的订阅信息给出 3–5 条中文建议（Markdown 列表）。不要进行任何金额计算或估算。关注冗余订阅、升级/降级机会、取消指引、以及临近到期的提醒。\n\n列表：\n{list}".to_string()),
+    }
+}
+
+fn get_prompts() -> Prompts {
+    let loaded = std::fs::read_to_string("static/prompts.json")
+        .ok()
+        .and_then(|s| serde_json::from_str::<Prompts>(&s).ok())
+        .unwrap_or_else(|| default_prompts());
+    loaded
+}
 
 #[derive(Deserialize)]
 pub struct SearchQuery {
@@ -121,6 +330,13 @@ pub async fn get_icon(
     }
 }
 
+/// 实时更新流 (GET `/api/stream`)
+/// Server-Sent Events stream
+///
+/// 当订阅数据发生变化时，向前端推送一个轻量事件 `"update"`，
+/// 前端接收到事件后会主动调用列表刷新接口以获取最新数据。
+/// Pushes a lightweight `"update"` event when subscription data changes.
+/// The frontend listens to this SSE and refreshes the list on message.
 #[axum::debug_handler]
 pub async fn stream_updates() -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
     let rx = BROADCAST.subscribe();

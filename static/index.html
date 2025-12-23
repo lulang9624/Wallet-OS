@@ -44,7 +44,10 @@
 
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <button class="btn" id="theme-toggle" onclick="toggleTheme()">Light Mode</button>
-                <button class="btn" onclick="openModal()">+ Add Subscription</button>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn" style="background: var(--accent);" onclick="openAnalyzeModal()">📊 AI Report</button>
+                    <button class="btn" onclick="openModal()">+ Add Subscription</button>
+                </div>
             </div>
         </div>
 
@@ -57,6 +60,18 @@
         <div class="modal-content">
             <h2>New Subscription</h2>
             
+            <!-- 智能导入区域 -->
+            <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px dashed var(--accent);">
+                <label style="color: var(--accent); font-weight: bold; display: block; margin-bottom: 8px; font-size: 0.9rem;">✨ Smart Import (AI)</label>
+                <div style="display: flex; gap: 10px;">
+                    <textarea id="smart-text" placeholder="Paste details here: e.g. 'Netflix $15.99 monthly starting today'" 
+                        style="flex: 1; height: 50px; resize: none; font-size: 0.9rem; margin-bottom: 0; padding: 8px; background: rgba(0,0,0,0.2); color: var(--text); border: 1px solid var(--border); border-radius: 4px;"></textarea>
+                    <button class="btn" onclick="smartParse()" style="height: 50px; background: var(--accent); white-space: nowrap; padding: 0 15px; display: flex; align-items: center;">
+                        Auto Fill
+                    </button>
+                </div>
+            </div>
+
             <!-- 订阅表单 -->
             <!-- Subscription Form -->
             <input type="text" id="name" placeholder="Name (e.g. Netflix)" oninput="clearError()" onfocus="this.select()">
@@ -81,12 +96,12 @@
                     <input type="date" id="start_date" style="margin: 0;" oninput="clearError()">
                 </div>
                 <div style="flex: 1;">
-                    <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 5px;">Next Payment</label>
+                    <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 5px;">End Date</label>
                     <input type="date" id="next_payment" oninput="clearError()" style="margin: 0;">
                 </div>
             </div>
             <div id="start-date-error" class="error-msg">Start date is required</div>
-            <div id="date-error" class="error-msg">Next payment date is required</div>
+            <div id="date-error" class="error-msg">End date is required</div>
             
             <button id="btn-save" class="btn" onclick="addSubscription()">Save</button>
             <button class="btn" style="background: #666;" onclick="closeModal()">Cancel</button>
@@ -109,8 +124,76 @@
         </div>
     </div>
 
+    <!-- AI 分析模态框 -->
+    <div id="analyzeModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <h2>💰 Financial Copilot</h2>
+            <div id="analyze-loading" style="display: none; text-align: center; padding: 20px;">
+                <p>Analyzing your spending patterns...</p>
+                <div class="spinner" style="margin: 10px auto; width: 30px; height: 30px; border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: var(--accent); animation: spin 1s ease-in-out infinite;"></div>
+            </div>
+            <div id="analyze-result" style="white-space: pre-wrap; line-height: 1.6; font-size: 0.95rem; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; max-height: 400px; overflow-y: auto;">
+                Click "Start Analysis" to generate a report.
+            </div>
+            
+            <div style="text-align: right; margin-top: 20px;">
+                <button id="btn-start-analyze" class="btn" onclick="startAnalysis()">Start Analysis</button>
+                <button class="btn" style="background: #666;" onclick="closeAnalyzeModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* Markdown 渲染样式优化 */
+        .markdown-body {
+            color: var(--text-color);
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+        .markdown-body h1, .markdown-body h2, .markdown-body h3 {
+            color: var(--accent);
+            margin-top: 1.5em;
+            margin-bottom: 0.5em;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 0.3em;
+        }
+        .markdown-body p { margin-bottom: 1em; }
+        .markdown-body ul, .markdown-body ol { padding-left: 20px; margin-bottom: 1em; }
+        .markdown-body li { margin-bottom: 0.3em; }
+        .markdown-body code {
+            background: var(--md-code-bg);
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-family: monospace;
+            color: var(--text-color);
+        }
+        .markdown-body pre {
+            background: var(--md-pre-bg);
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin-bottom: 1em;
+        }
+        .markdown-body table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1em;
+            background: var(--md-table-bg);
+        }
+        .markdown-body th, .markdown-body td {
+            border: 1px solid var(--md-border);
+            padding: 8px 12px;
+            text-align: left;
+        }
+        .markdown-body th { background: var(--md-table-bg); color: var(--accent); }
+        .markdown-body strong { color: var(--text-color); font-weight: 600; }
+    </style>
+
     <!-- JavaScript 逻辑部分 -->
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
         // API 基础路径
         const API = '/api/subscriptions';
@@ -200,13 +283,16 @@
 
                     if (sub.frequency === 0) {
                         durationLabel = 'Lifetime';
+                        remainingLabel = '';
                     } else {
                         // Calculate Total Duration
                         if (sub.start_date && sub.next_payment) {
                             const start = new Date(sub.start_date);
                             const end = new Date(sub.next_payment);
                             if (!isNaN(start) && !isNaN(end) && end >= start) {
-                                const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24));
+                                const dayMs = 1000 * 60 * 60 * 24;
+                                const rawDays = Math.ceil(Math.abs(end - start) / dayMs);
+                                const diffDays = Math.max(1, rawDays + 1); // 端点包含（含起止两天）
                                 if (diffDays >= 360) {
                                     const years = Math.round(diffDays / 365);
                                     durationLabel = years === 1 ? "1 Year" : `${years} Years`;
@@ -222,9 +308,10 @@
                         // Fallback if no dates or calc failed
                         if (!durationLabel) {
                             if (sub.frequency === 12) durationLabel = "1 Year";
+                            else if (sub.frequency === 3) durationLabel = "3 Months";
                             else if (sub.frequency === 1) durationLabel = "1 Month";
                             else if (sub.frequency === -1) durationLabel = "1 Day";
-                            else durationLabel = "1 Month"; // Default
+                            else durationLabel = "1 Month";
                         }
 
                         // Calculate Remaining Days
@@ -346,11 +433,11 @@
             // Handle overdue cases
             if (diffDays < 0) {
                 return `
-                    <div class="battery-container" title="Overdue">
+                    <div class="battery-container" title="Expired">
                         <div class="battery" style="border-color: #666;">
                             <div class="battery-level" style="width: 0%; background: #666;" data-width="0%"></div>
                         </div>
-                        <span class="days-left" style="color:#666">Exp</span>
+                        <span class="days-left" style="color:#666">Expired</span>
                     </div>
                 `;
             }
@@ -358,7 +445,7 @@
 
             // 估算周期长度（天）用于计算百分比
             // Estimate cycle length (days) for percentage calculation
-            const cycleDays = frequency === 12 ? 365 : (frequency === -1 ? 1 : 30);
+            const cycleDays = frequency === 12 ? 365 : (frequency === 3 ? 90 : (frequency === -1 ? 1 : 30));
             
             // 计算百分比 (剩余天数 / 周期)
             // Calculate percentage (days left / cycle)
@@ -584,7 +671,8 @@
                 n.setHours(0,0,0,0);
                 const diffDays = Math.ceil((n - s) / (1000 * 60 * 60 * 24));
                 if (diffDays <= 1) return -1;
-                if (diffDays >= 360) return 12;
+                if (diffDays >= 330) return 12;
+                if (diffDays >= 80 && diffDays <= 100) return 3;
                 return 1;
             };
             
@@ -625,13 +713,26 @@
                     errorMsg.innerText = "Invalid date";
                     errorMsg.style.display = 'block';
                     hasError = true;
-                } 
+                }
                 // Check for empty value
                 else if (!dateInput.value || dateInput.value.trim() === '') {
                     dateInput.classList.add('input-error');
-                    errorMsg.innerText = "Next payment date is required";
+                    errorMsg.innerText = "End date is required";
                     errorMsg.style.display = 'block';
                     hasError = true;
+                }
+                // Cross-field check: Next >= Start
+                else if (startDateInput.value && dateInput.value) {
+                    const s = new Date(startDateInput.value);
+                    const n = new Date(dateInput.value);
+                    s.setHours(0,0,0,0);
+                    n.setHours(0,0,0,0);
+                    if (n < s) {
+                        dateInput.classList.add('input-error');
+                        errorMsg.innerText = "End date must be after start date";
+                        errorMsg.style.display = 'block';
+                        hasError = true;
+                    }
                 }
             }
             
@@ -906,6 +1007,9 @@
                 document.getElementById('price').value = '';
                 document.getElementById('currency').value = 'CNY';
                 document.getElementById('lifetime').checked = false;
+                // 清空智能导入文本，避免残留影响新增
+                const smartText = document.getElementById('smart-text');
+                if (smartText) smartText.value = '';
                 
                 if (nextFp) nextFp.clear();
                 else document.getElementById('next_payment').value = '';
@@ -922,6 +1026,9 @@
         
         function closeModal() { 
             document.getElementById('addModal').style.display = 'none'; 
+            // 关闭时也清空智能导入文本，保持下一次新增清爽
+            const smartText = document.getElementById('smart-text');
+            if (smartText) smartText.value = '';
         }
         
         // 清除表单错误样式
@@ -982,6 +1089,97 @@
                 fetchSubs();
             }
         });
+        async function smartParse() {
+            const text = document.getElementById('smart-text').value;
+            if (!text.trim()) return;
+
+            const btn = document.querySelector('button[onclick="smartParse()"]');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = 'Analyzing...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/smart-parse', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.name) document.getElementById('name').value = data.name;
+                    if (data.price) document.getElementById('price').value = data.price;
+                    if (data.currency) document.getElementById('currency').value = data.currency;
+                    
+                    if (data.start_date) {
+                         const fp = document.getElementById('start_date')._flatpickr;
+                         if (fp) fp.setDate(data.start_date);
+                         else document.getElementById('start_date').value = data.start_date;
+                    }
+                    // 如果解析结果指示为永久订阅，则勾选并清空 End
+                    if (data.frequency === 0) {
+                        document.getElementById('lifetime').checked = true;
+                        toggleLifetime();
+                    }
+                    const endCandidate = data.next_payment || data.end || data.end_date || data.next || data.nextDate || data['End'];
+                    const isLifetime = document.getElementById('lifetime').checked;
+                    if (!isLifetime && endCandidate) {
+                        const fp = document.getElementById('next_payment')._flatpickr;
+                        if (fp) fp.setDate(endCandidate);
+                        else document.getElementById('next_payment').value = endCandidate;
+                    }
+                    
+                    // Clear errors
+                    clearError();
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Smart parse failed');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // Analysis Modal Logic
+        function openAnalyzeModal() {
+            document.getElementById('analyzeModal').style.display = 'flex';
+            const result = document.getElementById('analyze-result');
+            result.innerHTML = 'Click "Start Analysis" to generate a report.';
+            result.classList.remove('markdown-body'); // Reset class
+            document.getElementById('btn-start-analyze').style.display = 'inline-block';
+        }
+
+        function closeAnalyzeModal() {
+            document.getElementById('analyzeModal').style.display = 'none';
+        }
+
+        async function startAnalysis() {
+            const btn = document.getElementById('btn-start-analyze');
+            const loading = document.getElementById('analyze-loading');
+            const result = document.getElementById('analyze-result');
+            
+            btn.style.display = 'none';
+            loading.style.display = 'block';
+            result.innerHTML = '';
+            result.classList.add('markdown-body'); // Add markdown styling class
+
+            try {
+                const res = await fetch('/api/analyze', { method: 'POST' });
+                if (res.ok) {
+                    const data = await res.json();
+                    result.innerHTML = marked.parse(data.analysis);
+                } else {
+                    result.innerHTML = "Error: Failed to fetch analysis.";
+                }
+            } catch (e) {
+                console.error(e);
+                result.innerHTML = "Error: Network failure.";
+            } finally {
+                loading.style.display = 'none';
+                // Don't show start button again, forcing user to close or re-open to reset
+            }
+        }
     </script>
 </body>
 </html>

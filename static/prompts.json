@@ -1,0 +1,6 @@
+{
+  "smart_parse_system": "You are a helpful assistant that extracts JSON.",
+  "smart_parse_user_template": "You are a subscription data extractor. Extract details from this text: '{text}'. Return ONLY a valid JSON object with these fields: name (string), price (number), currency (string, e.g. CNY, USD), start_date (string YYYY-MM-DD, assume today is 2025-12-23 if 'today'), next_payment (string YYYY-MM-DD, synonymous with end_date), frequency (number: -1=daily, 1=monthly, 3=quarterly, 12=yearly, 0=lifetime). If missing, guess or leave null.",
+  "analyze_system": "You are a financial advisor.",
+  "analyze_user_template": "作为订阅优化顾问，请仅依据下面的订阅信息给出 3–5 条中文建议（Markdown 列表）。不要进行任何金额计算或估算。关注冗余订阅、订阅风险、升级/降级机会、取消指引、以及临近到期的提醒，以及给出其他的替换方案，还有更有性价比的产品\n\n列表：\n{list}"
+}

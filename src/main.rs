@@ -3,7 +3,7 @@ mod handlers;
 mod models;
 
 use axum::{
-    routing::{get, delete},
+    routing::{get, delete, post},
     Router,
 };
 use std::net::SocketAddr;
@@ -81,6 +81,8 @@ async fn main() {
         // API Routes: Search domain (GET)
         .route("/api/search", get(|state, query| async move { handlers::search_domain(state, query).await }))
         .route("/api/icon", get(handlers::get_icon))
+        .route("/api/smart-parse", post(handlers::smart_parse))
+        .route("/api/analyze", post(handlers::analyze_spending))
         
         // 静态文件服务
         // 将根路径 "/" 映射到本地的 "static" 目录，用于托管前端页面 (HTML, CSS, JS)。
