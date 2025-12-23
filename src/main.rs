@@ -71,6 +71,7 @@ async fn main() {
         // API 路由：获取所有订阅 (GET) 和 创建新订阅 (POST)
         // API Routes: Get all subscriptions (GET) and Create new subscription (POST)
         .route("/api/subscriptions", get(handlers::list_subscriptions).post(handlers::create_subscription))
+        .route("/api/stream", get(handlers::stream_updates))
         
         // API 路由：根据 ID 删除特定订阅 (DELETE) 或 更新特定订阅 (PUT)
         // API Routes: Delete a specific subscription by ID (DELETE) or Update specific subscription (PUT)

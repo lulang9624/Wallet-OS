@@ -23,6 +23,11 @@ use std::time::Duration;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use parking_lot::RwLock;
+use tokio::sync::broadcast;
+use axum::response::sse::{Sse, Event, KeepAlive};
+use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::StreamExt;
+use std::convert::Infallible;
 
 /// 域名搜索结果内存缓存
 /// In-memory cache for domain search results
@@ -32,6 +37,11 @@ use parking_lot::RwLock;
 /// response time and reducing external API load.
 static SEARCH_CACHE: Lazy<RwLock<HashMap<String, String>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
+
+static BROADCAST: Lazy<broadcast::Sender<()>> = Lazy::new(|| {
+    let (tx, _rx) = broadcast::channel(100);
+    tx
+});
 
 #[derive(Deserialize)]
 pub struct SearchQuery {
@@ -109,6 +119,16 @@ pub async fn get_icon(
         },
         Err(e) => (StatusCode::BAD_GATEWAY, e.to_string()).into_response(),
     }
+}
+
+#[axum::debug_handler]
+pub async fn stream_updates() -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
+    let rx = BROADCAST.subscribe();
+    let stream = BroadcastStream::new(rx).filter_map(|msg| match msg {
+        Ok(_) => Some(Ok(Event::default().data("update"))),
+        Err(_) => None,
+    });
+    Sse::new(stream).keep_alive(KeepAlive::new())
 }
 
 /// 搜索域名 API (GET /api/search?q=name)
@@ -337,7 +357,7 @@ pub async fn create_subscription(
 
     // 处理价格和日期逻辑
     // Handle price and date logic
-    if ![0,1,3,12].contains(&payload.frequency) {
+    if ![-1,0,1,3,12].contains(&payload.frequency) {
         return Err("Invalid frequency".to_string());
     }
     let (price, next_payment) = if payload.frequency == 0 {
@@ -396,6 +416,7 @@ pub async fn create_subscription(
         active: true, // 默认为激活状态 Default to active
     };
 
+    let _ = BROADCAST.send(());
     Ok(Json(sub))
 }
 
@@ -420,6 +441,7 @@ pub async fn delete_subscription(
 
     // 返回简单的成功状态 JSON
     // Return simple success status JSON
+    let _ = BROADCAST.send(());
     Ok(Json(serde_json::json!({ "status": "deleted" })))
 }
 
@@ -436,7 +458,7 @@ pub async fn update_subscription(
     }
 
     // 处理价格和日期逻辑
-    if ![0,1,3,12].contains(&payload.frequency) {
+    if ![-1,0,1,3,12].contains(&payload.frequency) {
         return Err("Invalid frequency".to_string());
     }
     let (price, next_payment) = if payload.frequency == 0 {
@@ -490,5 +512,6 @@ pub async fn update_subscription(
         active: true,
     };
 
+    let _ = BROADCAST.send(());
     Ok(Json(sub))
 }

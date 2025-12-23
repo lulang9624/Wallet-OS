@@ -25,10 +25,6 @@
             
             <div class="stats-grid">
                 <div class="stat-box">
-                    <h3>Total Monthly</h3>
-                    <div class="value" id="total-cost">...</div>
-                </div>
-                <div class="stat-box">
                     <h3>Active / Expired</h3>
                     <div class="value" id="active-count">...</div>
                 </div>
@@ -60,13 +56,8 @@
 
             <input type="text" id="currency" value="CNY" placeholder="Currency" onfocus="this.select()">
             
-            <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                <select id="frequency" style="flex: 1; margin-bottom: 0;">
-                    <option value="1">Monthly</option>
-                    <option value="3">Quarterly</option>
-                    <option value="12">Yearly</option>
-                </select>
-                <div style="margin-left: 15px; display: flex; align-items: center;">
+            <div style="display: flex; align-items: center; margin-bottom: 10px; justify-content: flex-end;">
+                <div style="display: flex; align-items: center;">
                     <input type="checkbox" id="lifetime" onchange="toggleLifetime()" style="width: auto; margin-right: 5px;">
                     <label for="lifetime" style="cursor: pointer;">Lifetime</label>
                 </div>
@@ -162,8 +153,11 @@
          */
         async function fetchSubs() {
             try {
-                // 发送 GET 请求获取数据
-                const res = await fetch(API);
+                if (window.subsAbortController) {
+                    window.subsAbortController.abort();
+                }
+                window.subsAbortController = new AbortController();
+                const res = await fetch(`${API}?t=${new Date().getTime()}`, { signal: window.subsAbortController.signal });
                 const data = await res.json();
                 
                 // 更新全局数据
@@ -173,6 +167,11 @@
                 renderStats(data);
                 
                 const list = document.getElementById('subs-list');
+                
+                // 记录当前滚动位置，防止刷新时跳动
+                // Save current scroll position to prevent jumping on refresh
+                const scrollTop = list.scrollTop;
+                
                 list.innerHTML = ''; // 清空现有列表
                 
                 // 遍历并生成 HTML
@@ -190,26 +189,26 @@
                     } else if (sub.start_date && sub.next_payment) {
                         const start = new Date(sub.start_date);
                         const end = new Date(sub.next_payment);
-                        if (!isNaN(start) && !isNaN(end) && end > start) {
+                        if (!isNaN(start) && !isNaN(end) && end >= start) {
                             const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24));
                             if (diffDays >= 360) {
                                 const years = Math.round(diffDays / 365);
-                                durationLabel = years === 1 ? "Yearly" : `${years} Years`;
-                            } else if (diffDays >= 28) {
-                                const months = Math.round(diffDays / 30);
-                                if (months === 1) durationLabel = "Monthly";
-                                else if (months === 3) durationLabel = "Quarterly";
-                                else durationLabel = `${months} Months`;
-                            } else {
-                                durationLabel = `${diffDays} Days`;
-                            }
-                        }
+                                durationLabel = years === 1 ? "1 Year" : `${years} Years`;
+                    } else if (diffDays >= 30) {
+                        const months = Math.round(diffDays / 30);
+                        durationLabel = months === 1 ? "1 Month" : `${months} Months`;
+                    } else {
+                        const d = diffDays <= 0 ? 1 : diffDays;
+                        durationLabel = d === 1 ? "1 Day" : `${d} Days`;
                     }
-                    // Fallback if no dates or calc failed
-                    if (!durationLabel && sub.frequency !== 0) {
-                        if (sub.frequency === 12) durationLabel = "Yearly";
-                        else if (sub.frequency === 3) durationLabel = "Quarterly";
-                        else durationLabel = "Monthly";
+                }
+            }
+            // Fallback if no dates or calc failed
+            if (!durationLabel && sub.frequency !== 0) {
+                        if (sub.frequency === 12) durationLabel = "1 Year";
+                        else if (sub.frequency === 1) durationLabel = "1 Month";
+                        else if (sub.frequency === -1) durationLabel = "1 Day";
+                        else durationLabel = "1 Month"; // Default
                     }
 
                     // 拼接卡片 HTML
@@ -238,10 +237,9 @@
                                         `
                                         <div>
                                             ${sub.start_date ? `<span>Start: ${sub.start_date}</span> <span style="margin:0 4px;opacity:0.3">|</span>` : ''}
-                                            <span>Next: ${sub.next_payment || 'N/A'}</span>
-                                        </div>
-                                        <div style="color: var(--text-color); margin-top: 2px; font-weight: 500;">
-                                            ${durationLabel}
+                                            <span>End: ${sub.next_payment || 'N/A'}</span>
+                                            <span style="margin:0 4px;opacity:0.3">|</span>
+                                            <span style="color: var(--text-color); font-weight: 500;">${durationLabel}</span>
                                         </div>
                                         `
                                     }
@@ -264,7 +262,14 @@
                         el.style.width = el.getAttribute('data-width');
                     });
                 }, 100);
+
+                // 恢复滚动位置
+                // Restore scroll position
+                if (scrollTop > 0) {
+                    list.scrollTop = scrollTop;
+                }
             } catch (error) {
+                if (error && error.name === 'AbortError') return;
                 console.error("Failed to fetch subscriptions:", error);
                 document.getElementById('subs-list').innerText = "Failed to load data.";
             }
@@ -319,10 +324,11 @@
                     </div>
                 `;
             }
+            if (diffDays === 0) diffDays = 1;
 
             // 估算周期长度（天）用于计算百分比
             // Estimate cycle length (days) for percentage calculation
-            const cycleDays = frequency === 12 ? 365 : (frequency === 3 ? 90 : 30);
+            const cycleDays = frequency === 12 ? 365 : (frequency === -1 ? 1 : 30);
             
             // 计算百分比 (剩余天数 / 周期)
             // Calculate percentage (days left / cycle)
@@ -455,104 +461,27 @@
          * Calculate and display statistics
          */
         function renderStats(subs) {
-            // 使用对象存储不同货币的总额
-            // Use object to store totals for different currencies
-            let totals = {};
             const now = new Date();
             now.setHours(0,0,0,0);
-            
-            subs.forEach(sub => {
-                // 忽略永久订阅 (不计入月费)
-                // Ignore lifetime subscriptions (not counted in monthly cost)
-                if (sub.frequency === 0) return;
-
-                // 忽略已过期的订阅
-                // Ignore expired subscriptions
-                if (sub.next_payment) {
-                    const nextDate = new Date(sub.next_payment);
-                    nextDate.setHours(0,0,0,0);
-                    if (nextDate < now) {
-                        return;
-                    }
-                }
-
-                // 初始化该货币的总额
-                // Initialize total for this currency
-                if (!totals[sub.currency]) {
-                    totals[sub.currency] = 0;
-                }
-
-                // 将年付金额分摊到每月
-                // Amortize yearly payments to monthly
-                let months = 0;
-                // 如果有开始日期和下次付款日期，优先使用日期差计算
-                // If start_date and next_payment exist, use date difference
-                if (sub.start_date && sub.next_payment) {
-                    const start = new Date(sub.start_date);
-                    const end = new Date(sub.next_payment);
-                    if (end > start) {
-                        const diffTime = Math.abs(end - start);
-                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-                        months = diffDays / 30.4375; // Average days per month (365.25 / 12)
-                    }
-                }
-
-                if (months > 0) {
-                    totals[sub.currency] += sub.price / months;
-                } else if(sub.frequency === 12) {
-                    totals[sub.currency] += sub.price / 12;
-                } else if(sub.frequency === 3) {
-                    totals[sub.currency] += sub.price / 3;
-                } else if(sub.frequency === 1) {
-                    totals[sub.currency] += sub.price;
-                }
-                // Lifetime (frequency === 0) costs are NOT added to monthly total
-            });
-
-            // 拼接显示字符串
-            // Build display string
-            let totalHtml = '';
-            const currencies = Object.keys(totals);
-            
-            if (currencies.length === 0) {
-                totalHtml = '0.00';
-            } else {
-                totalHtml = currencies.map(currency => {
-                    return `<div>${currency} ${totals[currency].toFixed(2)}</div>`;
-                }).join('');
-            }
-
-            document.getElementById('total-cost').innerHTML = totalHtml;
-            
-            // 计算活跃与过期订阅
-            // Calculate active vs expired subscriptions
             let activeCount = 0;
             let expiredCount = 0;
-            // now 已经在上面定义了
-            // now is already defined above
-
             subs.forEach(sub => {
-                // Lifetime is always active
                 if (sub.frequency === 0) {
                     activeCount++;
                     return;
                 }
-
                 if (!sub.next_payment) {
                     activeCount++;
                     return;
                 }
-
                 const nextDate = new Date(sub.next_payment);
                 nextDate.setHours(0,0,0,0);
-                
                 if (nextDate < now) {
                     expiredCount++;
                 } else {
                     activeCount++;
                 }
             });
-
             document.getElementById('active-count').innerHTML = `
                 <span style="color: #4caf50" title="Active">${activeCount}</span> / 
                 <span style="color: #f44336" title="Expired">${expiredCount}</span>
@@ -565,15 +494,11 @@
          */
         function toggleLifetime() {
             const isLifetime = document.getElementById('lifetime').checked;
-            const freqSelect = document.getElementById('frequency');
             const dateInput = document.getElementById('next_payment');
             const priceInput = document.getElementById('price');
             const fp = dateInput._flatpickr;
 
             if (isLifetime) {
-                freqSelect.disabled = true;
-                freqSelect.style.opacity = '0.5';
-                
                 if (fp) {
                     fp.clear();
                     fp._input.disabled = true; // Disable alt input
@@ -585,9 +510,6 @@
                 
                 priceInput.placeholder = "Price (Optional for Lifetime)";
             } else {
-                freqSelect.disabled = false;
-                freqSelect.style.opacity = '1';
-                
                 if (fp) {
                     fp._input.disabled = false;
                 } else {
@@ -611,6 +533,17 @@
             const dateInput = document.getElementById('next_payment');
             const startDateInput = document.getElementById('start_date');
             const isLifetime = document.getElementById('lifetime').checked;
+            const inferFrequency = (startStr, nextStr) => {
+                const s = new Date(startStr);
+                const n = new Date(nextStr);
+                if (isNaN(s) || isNaN(n)) return 1;
+                s.setHours(0,0,0,0);
+                n.setHours(0,0,0,0);
+                const diffDays = Math.ceil((n - s) / (1000 * 60 * 60 * 24));
+                if (diffDays <= 1) return -1;
+                if (diffDays >= 360) return 12;
+                return 1;
+            };
             
             // Clear previous errors
             clearError();
@@ -673,7 +606,7 @@
                     price: priceInput.value ? parseFloat(priceInput.value) : null, // Send null if empty
                     currency: document.getElementById('currency').value,
                     next_payment: isLifetime ? null : dateInput.value,
-                    frequency: isLifetime ? 0 : parseInt(document.getElementById('frequency').value),
+                    frequency: isLifetime ? 0 : inferFrequency(startDateInput.value, dateInput.value),
                     url: "", // Removed input, handled by auto-search logic below
                     logo: "",
                     start_date: document.getElementById('start_date').value || null
@@ -839,9 +772,9 @@
                 if (nextDate.getDate() !== d) {
                     nextDate.setDate(0);
                 }
-            } else if (sub.frequency === 3) {
-                addMonths(nextDate, 3);
-            } else {
+            } else if (sub.frequency === -1) { // Daily
+                 nextDate.setDate(nextDate.getDate() + 1);
+            } else { // Monthly
                 addMonths(nextDate, 1);
             }
             
@@ -906,12 +839,10 @@
                 // 处理 Lifetime
                 if (sub.frequency === 0) {
                     document.getElementById('lifetime').checked = true;
-                    document.getElementById('frequency').value = 1; // 重置为默认，虽然会被禁用
                     if (nextFp) nextFp.clear();
                     else document.getElementById('next_payment').value = '';
                 } else {
                     document.getElementById('lifetime').checked = false;
-                    document.getElementById('frequency').value = sub.frequency;
                     if (nextFp) nextFp.setDate(sub.next_payment || '');
                     else document.getElementById('next_payment').value = sub.next_payment || '';
                 }
@@ -932,7 +863,6 @@
                 document.getElementById('price').value = '';
                 document.getElementById('currency').value = 'CNY';
                 document.getElementById('lifetime').checked = false;
-                document.getElementById('frequency').value = 1;
                 
                 if (nextFp) nextFp.clear();
                 else document.getElementById('next_payment').value = '';
@@ -987,6 +917,28 @@
         flatpickr("#next_payment", fpConfig);
         
         fetchSubs();
+        let es;
+        function setupRealtime() {
+            es = new EventSource('/api/stream');
+            es.onmessage = () => { fetchSubs(); };
+            es.onerror = () => {
+                es.close();
+                setTimeout(setupRealtime, 1500);
+            };
+        }
+        setupRealtime();
+
+        // 自动刷新机制 (每 5 秒刷新一次)
+        // Auto-refresh mechanism removed as per user request
+        // The list will now only update on manual actions or page reload.
+
+        // 当页面重新变为可见时立即刷新
+        // Refresh immediately when page becomes visible
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                fetchSubs();
+            }
+        });
     </script>
 </body>
 </html>
