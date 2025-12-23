@@ -25,8 +25,20 @@
             
             <div class="stats-grid">
                 <div class="stat-box">
+                    <h3>Total Subscriptions</h3>
+                    <div class="value" id="total-count">...</div>
+                </div>
+                <div class="stat-box">
                     <h3>Active / Expired</h3>
                     <div class="value" id="active-count">...</div>
+                </div>
+                <div class="stat-box">
+                    <h3>Lifetime Subscriptions</h3>
+                    <div class="value" id="lifetime-count">...</div>
+                </div>
+                <div class="stat-box">
+                    <h3>Expiring Soon (7d)</h3>
+                    <div class="value" id="upcoming-expirations">...</div>
                 </div>
             </div>
 
@@ -184,31 +196,48 @@
 
                     // Calculate Duration / Cycle Label
                     let durationLabel = '';
+                    let remainingLabel = '';
+
                     if (sub.frequency === 0) {
                         durationLabel = 'Lifetime';
-                    } else if (sub.start_date && sub.next_payment) {
-                        const start = new Date(sub.start_date);
-                        const end = new Date(sub.next_payment);
-                        if (!isNaN(start) && !isNaN(end) && end >= start) {
-                            const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24));
-                            if (diffDays >= 360) {
-                                const years = Math.round(diffDays / 365);
-                                durationLabel = years === 1 ? "1 Year" : `${years} Years`;
-                    } else if (diffDays >= 30) {
-                        const months = Math.round(diffDays / 30);
-                        durationLabel = months === 1 ? "1 Month" : `${months} Months`;
                     } else {
-                        const d = diffDays <= 0 ? 1 : diffDays;
-                        durationLabel = d === 1 ? "1 Day" : `${d} Days`;
-                    }
-                }
-            }
-            // Fallback if no dates or calc failed
-            if (!durationLabel && sub.frequency !== 0) {
-                        if (sub.frequency === 12) durationLabel = "1 Year";
-                        else if (sub.frequency === 1) durationLabel = "1 Month";
-                        else if (sub.frequency === -1) durationLabel = "1 Day";
-                        else durationLabel = "1 Month"; // Default
+                        // Calculate Total Duration
+                        if (sub.start_date && sub.next_payment) {
+                            const start = new Date(sub.start_date);
+                            const end = new Date(sub.next_payment);
+                            if (!isNaN(start) && !isNaN(end) && end >= start) {
+                                const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24));
+                                if (diffDays >= 360) {
+                                    const years = Math.round(diffDays / 365);
+                                    durationLabel = years === 1 ? "1 Year" : `${years} Years`;
+                                } else if (diffDays >= 30) {
+                                    const months = Math.round(diffDays / 30);
+                                    durationLabel = months === 1 ? "1 Month" : `${months} Months`;
+                                } else {
+                                    const d = diffDays <= 0 ? 1 : diffDays;
+                                    durationLabel = d === 1 ? "1 Day" : `${d} Days`;
+                                }
+                            }
+                        }
+                        // Fallback if no dates or calc failed
+                        if (!durationLabel) {
+                            if (sub.frequency === 12) durationLabel = "1 Year";
+                            else if (sub.frequency === 1) durationLabel = "1 Month";
+                            else if (sub.frequency === -1) durationLabel = "1 Day";
+                            else durationLabel = "1 Month"; // Default
+                        }
+
+                        // Calculate Remaining Days
+                        if (sub.next_payment) {
+                            const end = new Date(sub.next_payment);
+                            const now = new Date();
+                            end.setHours(0,0,0,0);
+                            now.setHours(0,0,0,0);
+                            const diff = Math.ceil((end - now) / (1000 * 60 * 60 * 24));
+                            if (diff < 0) remainingLabel = "Expired";
+                            else if (diff === 0) remainingLabel = "Today";
+                            else remainingLabel = `${diff} Days`;
+                        }
                     }
 
                     // 拼接卡片 HTML
@@ -239,7 +268,8 @@
                                             ${sub.start_date ? `<span>Start: ${sub.start_date}</span> <span style="margin:0 4px;opacity:0.3">|</span>` : ''}
                                             <span>End: ${sub.next_payment || 'N/A'}</span>
                                             <span style="margin:0 4px;opacity:0.3">|</span>
-                                            <span style="color: var(--text-color); font-weight: 500;">${durationLabel}</span>
+                                            <span style="color: var(--text-color); font-weight: 500;">Total: ${durationLabel}</span>
+                                            ${remainingLabel ? `<span style="margin:0 4px;opacity:0.3">|</span> <span style="color: var(--text-color); font-weight: 500;">Left: ${remainingLabel}</span>` : ''}
                                         </div>
                                         `
                                     }
@@ -465,9 +495,16 @@
             now.setHours(0,0,0,0);
             let activeCount = 0;
             let expiredCount = 0;
+            let totalCount = subs.length;
+            let lifetimeCount = 0;
+            let upcomingExpirations = 0;
+            const oneWeekFromNow = new Date(now);
+            oneWeekFromNow.setDate(oneWeekFromNow.getDate() + 7);
+
             subs.forEach(sub => {
                 if (sub.frequency === 0) {
                     activeCount++;
+                    lifetimeCount++;
                     return;
                 }
                 if (!sub.next_payment) {
@@ -480,12 +517,18 @@
                     expiredCount++;
                 } else {
                     activeCount++;
+                    if (nextDate <= oneWeekFromNow) {
+                        upcomingExpirations++;
+                    }
                 }
             });
             document.getElementById('active-count').innerHTML = `
                 <span style="color: #4caf50" title="Active">${activeCount}</span> / 
                 <span style="color: #f44336" title="Expired">${expiredCount}</span>
             `;
+            document.getElementById('total-count').textContent = totalCount;
+            document.getElementById('lifetime-count').textContent = lifetimeCount;
+            document.getElementById('upcoming-expirations').textContent = upcomingExpirations;
         }
 
         /**
