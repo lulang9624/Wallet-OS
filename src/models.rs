@@ -39,8 +39,11 @@ pub struct Subscription {
     pub next_payment: Option<String>,
     
     /// 付款频率
+    /// -1 = 日付 (Daily)
     /// 1 = 月付 (Monthly)
+    /// 3 = 季付 (Quarterly)
     /// 12 = 年付 (Yearly)
+    /// 0 = 永久 (Lifetime)
     /// Payment frequency
     pub frequency: i64,
     
@@ -86,7 +89,7 @@ pub struct CreateSubscription {
     /// Next payment date (Optional, can be omitted for lifetime)
     pub next_payment: Option<String>,
     
-    /// 付款频率 (1=Monthly, 12=Yearly, 0=Lifetime)
+    /// 付款频率 (-1=Daily, 1=Monthly, 3=Quarterly, 12=Yearly, 0=Lifetime)
     /// Payment frequency
     pub frequency: i64,
     

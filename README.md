@@ -318,7 +318,7 @@ sudo ./target/release/wallet-os
   
   pub async fn create_subscription(State(pool): State<DbPool>, Json(payload): Json<CreateSubscription>) -> Result<Json<Subscription>, String> {
       if payload.name.trim().is_empty() { return Err("Name is required".to_string()); }
-      if ![0,1,3,12].contains(&payload.frequency) { return Err("Invalid frequency".to_string()); }
+      if ![-1,0,1,3,12].contains(&payload.frequency) { return Err("Invalid frequency".to_string()); }
       let (price, next_payment) = if payload.frequency == 0 {
           (payload.price.unwrap_or(0.0), None)
       } else {
@@ -334,7 +334,7 @@ sudo ./target/release/wallet-os
 
   pub async fn update_subscription(State(pool): State<DbPool>, Path(id): Path<i64>, Json(payload): Json<CreateSubscription>) -> Result<Json<Subscription>, String> {
       if payload.name.trim().is_empty() { return Err("Name is required".to_string()); }
-      if ![0,1,3,12].contains(&payload.frequency) { return Err("Invalid frequency".to_string()); }
+      if ![-1,0,1,3,12].contains(&payload.frequency) { return Err("Invalid frequency".to_string()); }
       let (price, next_payment) = if payload.frequency == 0 {
           (payload.price.unwrap_or(0.0), None)
       } else {
