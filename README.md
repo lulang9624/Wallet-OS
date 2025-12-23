@@ -13,7 +13,8 @@ Wallet OS 是一个现代化的个人订阅管理工具，帮助您轻松跟踪�
 <div align="center">
     <!-- 请替换下方链接为您的真实项目截图，建议放置在 docs/screenshot.png -->
     <!-- Please replace the link below with your actual project screenshot, e.g., docs/screenshot.png -->
-    <img src="docs/screenshot.png" alt="Wallet OS Dashboard" width="100%" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
+    <img src="docs/screenshot1.png" alt="Wallet OS Dashboard" width="100%" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
+    <img src="docs/screenshot2.png" alt="Wallet OS Dashboard" width="100%" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
 </div>
 
 <br/>
@@ -22,6 +23,11 @@ Wallet OS 是一个现代化的个人订阅管理工具，帮助您轻松跟踪�
 
 - **💰 费用追踪**: 自动计算每月总支出，支持多币种显示。
   - **精确计算**: 对于非月付/年付的订阅（如四年付），支持通过“开始日期”精确计算月均分摊费用。
+- **🤖 AI 智能填单**: 
+  - 粘贴订阅确认邮件或账单短信，AI 自动提取名称、价格、周期和日期并填充表单。
+  - 支持 OpenAI 兼容接口，未配置 Key 时提供本地关键词匹配（Mock）模式。
+- **🧠 AI 财务顾问**:
+  - 基于您的当前订阅列表，智能生成优化建议（如发现冗余订阅、推荐更具性价比的替代方案等）。
 - **🔋 续费倒计时**: 独特的“电池电量”可视化效果，直观展示距离下次扣费的天数（绿色->红色->灰色）。
 - **♾️ 永久订阅支持**: 支持记录一次性买断（Lifetime）的软件或服务，不计入每月经常性支出。
 - **🔍 智能图标匹配**: 
@@ -64,13 +70,20 @@ Wallet OS 是一个现代化的个人订阅管理工具，帮助您轻松跟踪�
    cd wallet-OS
    ```
 
-2. **启动服务**:
+2. **配置 AI (可选)**:
+   如果不配置，将默认使用 Mock 模式。
+   ```bash
+   # 修改 ai-assistant-api.env 文件填入您的 API Key
+   vi ai-assistant-api.env
+   ```
+
+3. **启动服务**:
    ```bash
    # 构建并启动容器
    docker-compose up -d --build
    ```
 
-3. **访问应用**:
+4. **访问应用**:
    打开浏览器访问 `http://localhost:8081`。
    *数据将自动持久化到 `./wallet_os_data` 目录。*
 
@@ -93,12 +106,37 @@ Wallet OS 是一个现代化的个人订阅管理工具，帮助您轻松跟踪�
   - 首次启动会自动创建数据库文件与父目录。
 - `PORT`: 后端服务监听端口，默认 `80`。
 
-#### AI 相关 (Optional)
+#### AI 功能配置 (Optional)
 
-- `OPENAI_API_KEY`: 启用智能解析与分析功能所需的密钥。
-- `OPENAI_API_BASE`: API Base，可选；默认 `https://api.openai.com/v1`。
-- `OPENAI_MODEL`: 模型名称，可选；默认 `gpt-3.5-turbo`。
-- `static/prompts.json`: 可自定义系统提示与用户模板；若缺失则使用代码内置默认。
+要启用 AI 智能填单和财务分析功能，请配置以下环境变量：
+
+- `OPENAI_API_KEY`: 您的 OpenAI API 密钥（或兼容服务的密钥）。
+- `OPENAI_API_BASE`: API 基础地址 (默认: `https://api.openai.com/v1`)。
+- `OPENAI_MODEL`: 使用的模型名称 (默认: `gpt-3.5-turbo`)。
+
+> **注意**: 如果未配置 `OPENAI_API_KEY`，系统将自动降级为 **Mock 模式**，使用本地简单的关键词匹配逻辑演示功能。
+
+#### 提示词配置 (Prompts)
+
+您可以通过修改 `static/prompts.json` 文件来自定义 AI 的行为和角色设定。
+
+- 使用 DeepSeek（OpenAI 兼容方式）：将 `OPENAI_*` 指向 DeepSeek 的网关与模型即可。
+  - Docker 部署：`docker-compose.yml` 已通过 `env_file: ai-assistant-api.env` 注入变量，示例：
+    ```env
+    # ai-assistant-api.env
+    OPENAI_API_KEY=your_deepseek_key
+    OPENAI_API_BASE=https://api.deepseek.com/v1
+    OPENAI_MODEL=deepseek-chat
+    ```
+  - 本地运行：
+    ```bash
+    export OPENAI_API_KEY=your_deepseek_key
+    export OPENAI_API_BASE=https://api.deepseek.com/v1
+    export OPENAI_MODEL=deepseek-chat
+    cargo run
+    ```
+- 关于 README 中提到的“ChatGPT Plus”关键词：仅用于无密钥/失败时的演示模式文本匹配，不限制你实际使用的供应商。
+- 可选增强：若希望改用 `DEEPSEEK_*` 变量名（如 `DEEPSEEK_API_KEY/BASE/MODEL`），请在代码中增加对应的读取逻辑或保持使用上述兼容方式。
 
 ### 日志 (Logs)
 

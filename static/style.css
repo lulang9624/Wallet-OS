@@ -88,6 +88,28 @@ h1 {
     flex-direction: column;
 }
 
+/* 
+ * 自定义滚动条 (Custom Scrollbar)
+ * 适配深色/浅色主题，使其更加美观
+ */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent; 
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
 .top-panel {
     flex-shrink: 0;
     background: var(--bg-color);
@@ -138,29 +160,30 @@ h1 {
  */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); /* 响应式列宽 */
-    gap: 20px;
-    margin-bottom: 30px;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); /* 响应式列宽，减小最小宽度以便在一行容纳更多 */
+    gap: 15px; /* 减小间距 */
+    margin-bottom: 20px;
 }
 
 .stat-box {
     background: var(--card-bg);
-    padding: 20px;
-    border-radius: 10px;
+    padding: 15px; /* 减小内边距 */
+    border-radius: 8px; /* 稍微减小圆角 */
     text-align: center;
     box-shadow: 0 4px 6px rgba(0,0,0,0.1); /* 增加轻微阴影 */
 }
 
 .stat-box h3 { 
     color: var(--text-muted); 
-    font-size: 0.9rem; 
+    font-size: 0.8rem; /* 减小标题字号 */
     margin-top: 0; 
+    margin-bottom: 5px; /* 减小标题与数值的间距 */
     text-transform: uppercase; /* 标题大写 */
     letter-spacing: 1px;
 }
 
 .stat-box .value { 
-    font-size: 2rem; 
+    font-size: 1.6rem; /* 减小数值字号 */
     font-weight: bold; 
     color: var(--accent); 
 }
@@ -268,10 +291,12 @@ input:focus, select:focus {
 
 .modal-content {
     background: var(--card-bg);
-    margin: 10% auto;
+    margin: 5vh auto; /* 使用 vh 单位，且减小边距以适应小屏幕 */
     padding: 30px;
     width: 90%;
     max-width: 500px;
+    max-height: 90vh; /* 防止模态框超出视口高度 */
+    overflow-y: auto; /* 如果内容过多，允许模态框整体滚动 */
     border-radius: 10px;
     box-shadow: 0 10px 25px rgba(0,0,0,0.5);
     animation: modalSlideIn 0.3s ease-out;
@@ -334,4 +359,130 @@ input:focus, select:focus {
     font-size: 0.8rem;
     color: var(--text-muted);
     font-weight: 500;
+}
+
+/*
+ * 响应式布局类 (Responsive Layout Classes)
+ * 替代之前的内联样式，便于媒体查询控制
+ */
+.action-bar {
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    margin-bottom: 20px;
+}
+
+.action-group {
+    display: flex; 
+    gap: 10px;
+}
+
+.sub-actions {
+    text-align: right;
+}
+
+/*
+ * 移动端适配 (Mobile Responsive)
+ * 针对屏幕宽度小于 600px 的设备进行优化
+ */
+@media (max-width: 600px) {
+    /* 减小容器内边距，节省空间 */
+    .container {
+        padding: 10px;
+    }
+
+    /* 调整标题边距 */
+    h1 {
+        margin-bottom: 20px;
+        font-size: 1.5rem;
+    }
+
+    /* 统计卡片网格间距缩小 */
+    .stats-grid {
+        gap: 10px;
+        grid-template-columns: 1fr 1fr; /* 强制两列布局，避免单列太长 */
+        margin-bottom: 20px;
+    }
+    
+    .stat-box {
+        padding: 15px;
+    }
+    
+    .stat-box h3 {
+        font-size: 0.7rem;
+    }
+    
+    .stat-box .value {
+        font-size: 1.5rem;
+    }
+
+    /* 顶部操作栏变为垂直排列 */
+    .action-bar {
+        flex-direction: column;
+        gap: 10px;
+        align-items: stretch;
+    }
+
+    .action-group {
+        display: flex;
+        gap: 10px;
+    }
+    
+    .action-group .btn {
+        flex: 1; /* 按钮平分宽度 */
+        white-space: nowrap;
+        padding: 10px 5px; /* 减小内边距防止文字溢出 */
+        font-size: 0.9rem;
+    }
+    
+    #theme-toggle {
+        width: 100%;
+    }
+
+    /* 订阅卡片垂直堆叠 */
+    .sub-card {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 15px;
+    }
+
+    .sub-info {
+        width: 100%;
+        margin-bottom: 15px;
+        border-bottom: 1px solid var(--border-color); /* 添加分割线 */
+        padding-bottom: 10px;
+    }
+    
+    /* 操作区域调整 */
+    .sub-actions {
+        width: 100%;
+        text-align: left; /* 文字左对齐 */
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .sub-price {
+        font-size: 1.5rem;
+        margin-bottom: 5px;
+    }
+    
+    .sub-btns {
+        display: flex;
+        justify-content: space-between; /* 按钮分散对齐 */
+        width: 100%;
+    }
+    
+    .sub-btns button {
+        flex: 1;
+        text-align: center;
+        padding: 8px;
+        background: rgba(255,255,255,0.05) !important; /* 给纯文字按钮加个背景，方便点击 */
+        border-radius: 4px;
+        margin-right: 5px !important; /* 覆盖原有的 margin-right */
+    }
+    
+    .sub-btns button:last-child {
+        margin-right: 0 !important;
+    }
 }
